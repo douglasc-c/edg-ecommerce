@@ -1,12 +1,15 @@
 import { randomUUID } from 'node:crypto';
 import { transaction } from './db.mjs';
-import { requireThat, HttpError, text, integer, positive, hash, now, address, safeLink } from './security.mjs';
+import { coupons } from './coupons.mjs';
+import { photoIds } from './media.mjs';
+import { requireThat, HttpError, text, integer, positive, hash, now, address, safeLink, fiscalFields } from './security.mjs';
 export function commerce(db,config,provider) {
   const one=(sql,...args)=>db.prepare(sql).get(...args);
   const all=(sql,...args)=>db.prepare(sql).all(...args);
   const run=(sql,...args)=>db.prepare(sql).run(...args);
   const event=(id,status,message)=>run('INSERT INTO order_events(order_id,status,message,created_at) VALUES(?,?,?,?)',id,status,message,now());
   const audit=(actor,action,id,details={})=>run('INSERT INTO audit(actor_id,action,entity_id,details,created_at) VALUES(?,?,?,?,?)',actor,action,id,JSON.stringify(details),now());
+  const discounts=coupons(db,audit);
   const locks=new Set();
   async function locked(key,fn) {
     requireThat(!locks.has(key),409,'Uma operação está em andamento para este pedido. Aguarde e tente novamente.');
@@ -19,7 +22,7 @@ export function commerce(db,config,provider) {
   function rawCart(userId) {return all('SELECT p.*,c.quantity FROM carts c JOIN products p ON p.id=c.product_id WHERE user_id=? ORDER BY p.id',userId);}
   function fingerprint(items) {return hash(JSON.stringify(items.map(p=>[p.id,p.price,p.quantity,p.active,p.weight,p.width,p.height,p.length])));}
   function validCart(items) {requireThat(items.length>0 && items.length<=100,400,'O carrinho está vazio ou excede o limite.'); for(const p of items) requireThat(p.active && p.stock-p.reserved>=p.quantity,409,`Estoque insuficiente para ${p.name}.`);}
-  function publicProduct(p) {return {id:p.id,sku:p.sku,name:p.name,description:p.description,category:p.category,price:p.price,available:p.stock-p.reserved,color:p.color,icon:p.icon};}
+  function publicProduct(p) {return {id:p.id,sku:p.sku,name:p.name,description:p.description,category:p.category,price:p.price,available:p.stock-p.reserved,color:p.color,icon:p.icon,images:JSON.parse(p.images).map(id=>`/media/${id}.jpg`)};}
   function order(id,user=null,manage=false) {
     const o=one('SELECT o.*,u.name customer_name,u.email customer_email FROM orders o JOIN users u ON u.id=o.user_id WHERE o.id=?',id);
     requireThat(o && (manage || !user || o.user_id===user.id),404,'Pedido não encontrado.');
@@ -27,6 +30,7 @@ export function commerce(db,config,provider) {
   }
   function release(o,status,message) {
     for(const item of all('SELECT * FROM order_items WHERE order_id=?',o.id)) run('UPDATE products SET reserved=reserved-? WHERE id=?',item.quantity,item.product_id);
+    discounts.release(o.id);
     run('UPDATE orders SET status=?,updated_at=? WHERE id=?',status,now(),o.id); event(o.id,status,message);
   }
   function expire() {
@@ -62,6 +66,7 @@ export function commerce(db,config,provider) {
           if(available) for(const i of items) run('UPDATE products SET stock=stock-? WHERE id=?',i.quantity,i.product_id);
           else status='payment_review';
         } else status='payment_review';
+        discounts.used(o.id);
         if(status==='paid') for(const i of items) run('INSERT INTO movements(product_id,quantity,reason,reference,created_at) VALUES(?,?,?,?,?)',i.product_id,-i.quantity,'Venda confirmada',o.id,now());
         run("UPDATE orders SET status=?,payment_status='approved',payment_id=?,updated_at=? WHERE id=?",status,pid,now(),o.id);
         run("INSERT OR IGNORE INTO ledger(order_id,type,amount,description,reference,created_at) VALUES(?,'income',?,?,?,?)",o.id,o.total,`Venda #${o.number}`,`payment-${pid}`,now());
@@ -114,7 +119,7 @@ export function commerce(db,config,provider) {
     });
   }
   return {
-    audit, expire, applyPayment, applyTracking, order,
+    audit, expire, applyPayment, applyTracking, order, coupons:discounts,
     products(admin=false) {return admin?all('SELECT *,stock-reserved available FROM products ORDER BY created_at DESC'):all('SELECT * FROM products WHERE active=1 ORDER BY created_at DESC').map(publicProduct);},
     cart,
     setCart(user,id,quantity) {
@@ -133,7 +138,7 @@ export function commerce(db,config,provider) {
     },
     async checkout(user,input,key) {
       text(key,'Chave de idempotência',16,100); const a=address(input.address);
-      const requestHash=hash(JSON.stringify({quote_id:input.quote_id,service_id:input.service_id,address:a})); expire();
+      const requestHash=hash(JSON.stringify({quote_id:input.quote_id,service_id:input.service_id,address:a,coupon:input.coupon?String(input.coupon).trim().toUpperCase():null})); expire();
       let o=one('SELECT * FROM orders WHERE user_id=? AND idempotency_key=?',user.id,key);
       if(o) requireThat(o.request_hash===requestHash,409,'Chave já utilizada para outro checkout.');
       else o=transaction(db,()=>{
@@ -141,13 +146,14 @@ export function commerce(db,config,provider) {
         const q=one('SELECT * FROM quotes WHERE id=? AND user_id=? AND expires_at>?',input.quote_id,user.id,now());
         requireThat(q && q.fingerprint===fingerprint(items) && q.postal_code===a.postal_code,409,'Cotação expirada ou carrinho alterado. Calcule o frete novamente.');
         const service=JSON.parse(q.options).find(s=>s.id===input.service_id); requireThat(service,400,'Frete inválido.');
-        const subtotal=items.reduce((s,p)=>s+p.price*p.quantity,0); integer(subtotal+service.price,'Total do pedido',1,100000000);
+        const subtotal=items.reduce((s,p)=>s+p.price*p.quantity,0); const coupon=discounts.calculate(user,subtotal,input.coupon); integer(subtotal-coupon.discount+service.price,'Total do pedido',1,100000000);
         const id=randomUUID(), time=now(), number=(one('SELECT MAX(number) n FROM orders').n||1000)+1;
         const until=new Date(Date.now()+config.reservationMinutes*60000).toISOString();
-        run("INSERT INTO orders(id,number,user_id,status,subtotal,shipping,total,address,shipping_service,idempotency_key,request_hash,reserved_until,created_at,updated_at) VALUES(?,?,?,'awaiting_payment',?,?,?,?,?,?,?,?,?,?)",id,number,user.id,subtotal,service.price,subtotal+service.price,JSON.stringify(a),JSON.stringify(service),key,requestHash,until,time,time);
+        run("INSERT INTO orders(id,number,user_id,status,subtotal,shipping,total,address,shipping_service,idempotency_key,request_hash,reserved_until,created_at,updated_at) VALUES(?,?,?,'awaiting_payment',?,?,?,?,?,?,?,?,?,?)",id,number,user.id,subtotal,service.price,subtotal-coupon.discount+service.price,JSON.stringify(a),JSON.stringify(service),key,requestHash,until,time,time);
+        run('UPDATE orders SET discount=?,coupon_code=? WHERE id=?',coupon.discount,coupon.code,id);discounts.reserve(id,user.id,coupon.code);
         for(const p of items) {
           run('UPDATE products SET reserved=reserved+? WHERE id=?',p.quantity,p.id);
-          run('INSERT INTO order_items VALUES(?,?,?,?,?,?,?,?,?,?,?)',id,p.id,p.sku,p.name,p.price,p.cost,p.quantity,p.weight,p.width,p.height,p.length);
+          run('INSERT INTO order_items(order_id,product_id,sku,name,price,cost,quantity,weight,width,height,length,fiscal) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)',id,p.id,p.sku,p.name,p.price,p.cost,p.quantity,p.weight,p.width,p.height,p.length,p.fiscal);
         }
         run('DELETE FROM carts WHERE user_id=?',user.id); event(id,'awaiting_payment','Pedido criado e estoque reservado.');
         return one('SELECT * FROM orders WHERE id=?',id);
@@ -175,6 +181,8 @@ export function commerce(db,config,provider) {
     },
     saveProduct(user,input,id=null) {
       const p={sku:text(input.sku,'SKU',1,50),name:text(input.name,'Nome',2,120),description:text(input.description,'Descrição',1,2000),category:text(input.category,'Categoria',1,80),price:integer(input.price,'Preço em centavos',1),cost:integer(input.cost,'Custo em centavos'),low_stock:integer(input.low_stock,'Estoque mínimo',0,10000),weight:positive(input.weight,'Peso'),width:positive(input.width,'Largura'),height:positive(input.height,'Altura'),length:positive(input.length,'Comprimento'),color:text(input.color,'Cor',7,7),icon:text(input.icon,'Símbolo',1,8),active:input.active===false?0:1};
+      if(input.images!==undefined)p.images=photoIds(db,input.images);
+      if(input.fiscal!==undefined)p.fiscal=JSON.stringify(fiscalFields(input.fiscal));
       requireThat(/^#[a-fA-F0-9]{6}$/.test(p.color),400,'Cor inválida.');
       requireThat(!one('SELECT id FROM products WHERE sku=? AND id!=?',p.sku,id||''),409,'SKU já cadastrado.');
       return transaction(db,()=>{
@@ -193,6 +201,7 @@ export function commerce(db,config,provider) {
       return transaction(db,()=>{const o=order(id,user,true);
         const allowed={paid:['picking'],picking:['ready'],ready:['shipped'],shipped:['delivered']};
         requireThat(o.payment_status==='approved' && o.refunded===0 && allowed[o.status]?.includes(status),409,'Transição não permitida para este pedido.');
+        if(status==='shipped'){const note=one('SELECT status,environment FROM invoices WHERE order_id=?',id);if(note)requireThat(note.status==='authorized' && (config.mode==='demo'||note.environment==='production'),409,'O envio exige nota autorizada no ambiente correto.');}
         if(status==='shipped') run('UPDATE orders SET tracking_code=?,tracking_url=? WHERE id=?',text(input.tracking_code,'Rastreio',3,100),safeLink(input.tracking_url),id);
         run('UPDATE orders SET status=?,updated_at=? WHERE id=?',status,now(),id); event(id,status,{picking:'Separação iniciada.',ready:'Pedido embalado e pronto para envio.',shipped:'Pedido enviado à transportadora.',delivered:'Entrega confirmada.'}[status]); audit(user.id,'order.status',id,{status}); return order(id,user,true);});
     },
@@ -208,6 +217,9 @@ export function commerce(db,config,provider) {
         const o=order(id,user,true); requireThat(['paid','picking','ready'].includes(o.status) && o.payment_status==='approved' && !o.refunded,409,'Pedido indisponível para etiqueta.');
         if(action==='create') {
           requireThat(!o.label_id,409,'Pedido já tem etiqueta.');
+          const issued=one('SELECT invoice_key,status,environment FROM invoices WHERE order_id=?',id);
+          if(issued) requireThat(issued.status==='authorized' && issued.environment==='production',409,'A etiqueta real exige NF-e autorizada em produção.');
+          input.invoice_key=issued?.invoice_key||input.invoice_key;
           requireThat(/^\d{44}$/.test(input.invoice_key||''),400,'Informe a chave de 44 dígitos da NF-e.');
           const labelId=await provider.createLabel({...o,address:JSON.stringify(o.address),shipping_service:JSON.stringify(o.shipping_service)},o.items,input.invoice_key);
           run('UPDATE orders SET label_id=?,updated_at=? WHERE id=?',labelId,now(),id);

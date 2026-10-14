@@ -5,17 +5,24 @@ import { randomUUID } from 'node:crypto';
 import { database, transaction } from './db.mjs';
 import { providers } from './providers.mjs';
 import { commerce } from './commerce.mjs';
+import { savePhoto } from './media.mjs';
+import { passwordRecovery,emailProvider } from './password-reset.mjs';
+import { fiscalProvider,invoiceService } from './invoices.mjs';
 import { HttpError, requireThat, text, integer, email, postal, passwordHash, passwordMatches, roles, permissions, token, hash, now } from './security.mjs';
 export function configuration(env=process.env) {
   const c={url:(env.APP_URL||'http://localhost:3000').replace(/\/$/,''),mode:env.COMMERCE_MODE||'demo',production:env.NODE_ENV==='production',reservationMinutes:Number(env.RESERVATION_MINUTES||30),storeName:env.STORE_NAME||'EDG Commerce',mpToken:env.MERCADO_PAGO_ACCESS_TOKEN,mpSecret:env.MERCADO_PAGO_WEBHOOK_SECRET,collectorId:env.MERCADO_PAGO_COLLECTOR_ID,meToken:env.MELHOR_ENVIO_TOKEN,meSecret:env.MELHOR_ENVIO_WEBHOOK_SECRET,meSandbox:env.MELHOR_ENVIO_SANDBOX!=='false',originPostal:env.ORIGIN_POSTAL_CODE,supportEmail:env.SUPPORT_EMAIL,shippingFrom:env.SHIPPING_FROM_JSON?JSON.parse(env.SHIPPING_FROM_JSON):null};
+  Object.assign(c,{resendKey:env.RESEND_API_KEY,emailFrom:env.EMAIL_FROM,emailKey:env.EMAIL_ENCRYPTION_KEY,nfeToken:env.FOCUS_NFE_TOKEN,nfeEnvironment:env.NFE_ENVIRONMENT||'homologation',nfeEmitter:env.NFE_EMITTER_JSON?JSON.parse(env.NFE_EMITTER_JSON):null,nfeDefaults:env.NFE_DEFAULTS_JSON?JSON.parse(env.NFE_DEFAULTS_JSON):null});
+  requireThat(['homologation','production'].includes(c.nfeEnvironment),500,'NFE_ENVIRONMENT inválido.');
+  requireThat(!c.emailKey || /^[a-f0-9]{64}$/i.test(c.emailKey),500,'EMAIL_ENCRYPTION_KEY deve ter 32 bytes em hexadecimal.');
   requireThat(['demo','live'].includes(c.mode),500,'COMMERCE_MODE deve ser demo ou live.');
   requireThat(Number.isInteger(c.reservationMinutes) && c.reservationMinutes>=5 && c.reservationMinutes<=1440,500,'RESERVATION_MINUTES inválido.');
   const u=new URL(c.url); requireThat(['http:','https:'].includes(u.protocol) && u.pathname==='/' && !u.search && !u.hash && !u.username && !u.password,500,'APP_URL deve ser uma origem HTTP válida.');
   if(c.production) requireThat(c.mode==='live' && u.protocol==='https:' && c.mpToken && c.mpSecret && c.collectorId && c.meToken && c.originPostal && c.supportEmail && !c.meSandbox,500,'Produção exige HTTPS, modo live e credenciais completas de produção.');
   return c;
 }
-export function createApp({db=database(),config=configuration(),provider=providers(config)}={}) {
+export function createApp({db=database(),config=configuration(),provider=providers(config),mailer=emailProvider(config),fiscal=fiscalProvider(config)}={}) {
   const shop=commerce(db,config,provider), buckets=new Map();
+  const recovery=passwordRecovery(db,config,mailer),invoices=invoiceService(db,config,fiscal,shop);
   const get=(sql,...args)=>db.prepare(sql).get(...args), run=(sql,...args)=>db.prepare(sql).run(...args);
   function limited(req,name,limit=30) {
     const key=`${name}:${req.socket.remoteAddress}`, time=Date.now(); let bucket=buckets.get(key);
@@ -51,12 +58,14 @@ export function createApp({db=database(),config=configuration(),provider=provide
           for(const key of ['payment_id','preference_id','label_id','label_url','shipping_data']) delete result[key];
         }
         if(!viewer || !['admin','finance','inventory'].includes(viewer.role)) for(const item of result.items)delete item.cost;
+        if(!viewer || viewer.role==='customer')for(const item of result.items)delete item.fiscal;
+        result.invoice=invoices.get(result.id);
       }
       return result;
     }
     const respond=(data,status=200)=>{res.writeHead(status,{'Content-Type':'application/json; charset=utf-8','Cache-Control':'no-store'});res.end(JSON.stringify(sanitize(data)));};
     if(path==='/api/health' && method==='GET') return respond({status:'ok'});
-    if(path==='/api/config' && method==='GET') return respond({name:config.storeName,mode:config.mode,payment:'Mercado Pago',shipping:'Melhor Envio'});
+    if(path==='/api/config' && method==='GET') return respond({name:config.storeName,mode:config.mode,payment:'Mercado Pago',shipping:'Melhor Envio',fiscal_environment:config.mode==='demo'?'demo':config.nfeEnvironment,email_enabled:config.mode==='demo'||Boolean(config.resendKey&&config.emailFrom&&config.emailKey)});
     if(path==='/api/products' && method==='GET') {shop.expire(); return respond(shop.products());}
     if(path==='/api/auth/me' && method==='GET') {const u=session(req,false);return respond({user:u?publicUser(u):null,csrf:u?.csrf||null});}
     if(path==='/api/webhooks/melhorenvio' && method==='POST') {
@@ -79,6 +88,8 @@ export function createApp({db=database(),config=configuration(),provider=provide
       requireThat(req.headers.origin===new URL(config.url).origin,403,'Origem não permitida.');
       limited(req,'write',120);
     }
+    if(path==='/api/auth/forgot-password' && method==='POST') {limited(req,'password-recovery',5);const b=await body(req);return respond(recovery.request(b.email));}
+    if(path==='/api/auth/reset-password' && method==='POST') {limited(req,'password-reset',10);const b=await body(req);await recovery.reset(b.token,b.password);res.setHeader('Set-Cookie',cookie('',0));return respond({ok:true});}
     if(['/api/auth/register','/api/auth/login'].includes(path) && method==='POST') {
       limited(req,'auth',10); const input=await body(req); const e=email(input.email); let u;
       if(path.endsWith('register')) {
@@ -101,20 +112,30 @@ export function createApp({db=database(),config=configuration(),provider=provide
     if(path==='/api/auth/logout' && method==='POST') {run('DELETE FROM sessions WHERE token=?',user.token);res.setHeader('Set-Cookie',cookie('',0));return respond({ok:true});}
     if(path==='/api/auth/password' && method==='POST') {
       const b=await body(req),u=get('SELECT * FROM users WHERE id=?',user.id); requireThat(await passwordMatches(b.current_password,u.password),401,'Senha atual incorreta.');
-      const pwd=await passwordHash(b.password); transaction(db,()=>{run('UPDATE users SET password=? WHERE id=?',pwd,user.id);run('DELETE FROM sessions WHERE user_id=?',user.id);});res.setHeader('Set-Cookie',cookie('',0));return respond({ok:true});
+      const pwd=await passwordHash(b.password); transaction(db,()=>{run('UPDATE users SET password=? WHERE id=?',pwd,user.id);run('DELETE FROM sessions WHERE user_id=?',user.id);run('UPDATE password_resets SET used_at=? WHERE user_id=? AND used_at IS NULL',now(),user.id);run('DELETE FROM email_outbox WHERE user_id=? AND sent_at IS NULL',user.id);});res.setHeader('Set-Cookie',cookie('',0));return respond({ok:true});
     }
     if(path==='/api/cart' && method==='GET') return respond(shop.cart(user.id));
     let match;
     if((match=path.match(/^\/api\/cart\/([^/]+)$/)) && method==='PUT') {const b=await body(req);return respond(shop.setCart(user,match[1],b.quantity));}
     if(path==='/api/shipping/quote' && method==='POST') {const b=await body(req);return respond(await shop.quote(user,postal(b.postal_code)));}
+    if(path==='/api/coupons/check' && method==='POST') {const b=await body(req);shop.expire();return respond(shop.coupons.calculate(user,shop.cart(user.id).subtotal,b.code));}
     if(path==='/api/checkout' && method==='POST') return respond(await shop.checkout(user,await body(req),req.headers['idempotency-key']),201);
     if(path==='/api/orders' && method==='GET') return respond(shop.listOrders(user));
+    if((match=path.match(/^\/api\/orders\/([^/]+)\/invoice\/(pdf|xml)$/)) && method==='GET'){const [_,id,kind]=match;shop.order(id,user,permissions[user.role]?.includes('orders'));const content=await invoices.download(id,kind);res.writeHead(200,{'Content-Type':kind==='pdf'?'application/pdf':'application/xml','Content-Disposition':`attachment; filename="nfe-${id}.${kind}"`,'Cache-Control':'no-store'});return res.end(content);}
     if((match=path.match(/^\/api\/orders\/([^/]+)$/)) && method==='GET') return respond(shop.order(match[1],user));
     if((match=path.match(/^\/api\/orders\/([^/]+)\/(cancel|demo-pay|payment)$/)) && method==='POST') {
       const [_,id,action]=match;
       return respond(action==='cancel'?shop.cancel(user,id):action==='demo-pay'?shop.demoPay(user,id):await shop.paymentLink(user,id));
     }
     requireThat(path.startsWith('/api/admin/'),404,'Rota não encontrada.');
+    if(path==='/api/admin/media' && method==='POST') {allowed(user,'catalog');let size=0;const chunks=[];for await(const c of req){size+=c.length;requireThat(size<=5*1024*1024,413,'A foto deve ter até 5 MB.');chunks.push(c);}const result=await savePhoto(db,user,Buffer.concat(chunks),String(req.headers['content-type']||'').split(';')[0]);shop.audit(user.id,'media.upload',result.id);return respond(result,201);}
+    if(path==='/api/admin/coupons' && method==='GET') {allowed(user,'coupons');return respond(shop.coupons.list());}
+    if(path==='/api/admin/coupons' && method==='POST') {allowed(user,'coupons');return respond(shop.coupons.save(user,await body(req)),201);}
+    if((match=path.match(/^\/api\/admin\/coupons\/([^/]+)$/)) && method==='PATCH') {allowed(user,'coupons');const b=await body(req);return respond(shop.coupons.toggle(user,match[1],b.active));}
+    if(path==='/api/admin/emails' && method==='GET') {allowed(user,'users');return respond(recovery.list());}
+    if(path==='/api/admin/invoices' && method==='GET') {allowed(user,'invoices');return respond(invoices.list());}
+    if((match=path.match(/^\/api\/admin\/orders\/([^/]+)\/invoice-preview$/)) && method==='GET') {allowed(user,'invoices');return respond(invoices.preview(user,match[1]));}
+    if((match=path.match(/^\/api\/admin\/orders\/([^/]+)\/invoice$/)) && method==='POST') {allowed(user,'invoices');const b=await body(req),id=match[1];return respond(b.action==='consult'?await invoices.consult(user,id):b.action==='cancel'?await invoices.cancel(user,id,b.reason):b.action==='emit'?await invoices.emit(user,id,b.fiscal||{}):(()=>{throw new HttpError(400,'Ação fiscal inválida.');})());}
     if(path==='/api/admin/dashboard' && method==='GET') {allowed(user,'dashboard');return respond(shop.dashboard(user));}
     if(path==='/api/admin/products' && method==='GET') {allowed(user,'catalog');return respond(shop.products(true));}
     if(path==='/api/admin/products' && method==='POST') {allowed(user,'catalog');return respond(shop.saveProduct(user,await body(req)),201);}
@@ -141,7 +162,7 @@ export function createApp({db=database(),config=configuration(),provider=provide
     if((match=path.match(/^\/api\/admin\/users\/([^/]+)$/)) && method==='PATCH') {
       allowed(user,'users'); const b=await body(req),id=match[1];requireThat(roles.includes(b.role) && typeof b.active==='boolean',400,'Perfil ou situação inválidos.');
       requireThat(id!==user.id,409,'Você não pode alterar seu próprio acesso.');requireThat(get('SELECT id FROM users WHERE id=?',id),404,'Usuário não encontrado.');
-      transaction(db,()=>{run('UPDATE users SET role=?,active=? WHERE id=?',b.role,b.active?1:0,id);run('DELETE FROM sessions WHERE user_id=?',id);shop.audit(user.id,'user.access',id,{role:b.role,active:b.active});});return respond({ok:true});
+      transaction(db,()=>{run('UPDATE users SET role=?,active=? WHERE id=?',b.role,b.active?1:0,id);run('DELETE FROM sessions WHERE user_id=?',id);run('UPDATE password_resets SET used_at=? WHERE user_id=? AND used_at IS NULL',now(),id);run('DELETE FROM email_outbox WHERE user_id=? AND sent_at IS NULL',id);shop.audit(user.id,'user.access',id,{role:b.role,active:b.active});});return respond({ok:true});
     }
     throw new HttpError(404,'Rota não encontrada.');
   }
@@ -153,6 +174,7 @@ export function createApp({db=database(),config=configuration(),provider=provide
       const url=new URL(req.url,config.url);
       if(url.pathname.startsWith('/api/')) return await route(req,res,url);
       requireThat(req.method==='GET' || req.method==='HEAD',405,'Método não permitido.');
+      if(/^\/media\/[a-f0-9]{64}\.jpg$/.test(url.pathname)){const id=url.pathname.slice(7,-4),photo=db.prepare('SELECT data FROM media WHERE id=?').get(id);requireThat(photo,404,'Foto não encontrada.');res.writeHead(200,{'Content-Type':'image/jpeg','Cache-Control':'public, max-age=31536000, immutable'});return res.end(req.method==='HEAD'?undefined:Buffer.from(photo.data));}
       const files={'/':'index.html','/app.js':'app.js','/styles.css':'styles.css','/favicon.svg':'favicon.svg'};
       const filename=files[url.pathname];requireThat(filename,404,'Página não encontrada.');
       const content=await readFile(new URL(`../public/${filename}`,import.meta.url));
@@ -165,9 +187,9 @@ export function createApp({db=database(),config=configuration(),provider=provide
     }
   });
   server.requestTimeout=20000;server.headersTimeout=10000;
-  const maintenance=setInterval(()=>{try{shop.expire();}catch(e){console.error('Reservation maintenance failed:',e.code||e.name);}},60000);maintenance.unref();
+  const maintenance=setInterval(()=>{try{shop.expire();recovery.flush().catch(()=>console.error('Email maintenance failed'));}catch(e){console.error('Reservation maintenance failed:',e.code||e.name);}},60000);maintenance.unref();
   server.on('close',()=>clearInterval(maintenance));
-  return {server,db,shop};
+  return {server,db,shop,recovery,invoices};
 }
 if(process.argv[1]===fileURLToPath(import.meta.url)) {
   const app=createApp();app.shop.expire(); const port=Number(process.env.PORT||3000);

@@ -1,6 +1,7 @@
 import { DatabaseSync } from 'node:sqlite';
 import { mkdirSync } from 'node:fs';
 import { dirname } from 'node:path';
+import { migrate } from './migrations.mjs';
 export function database(path = process.env.DB_PATH || './data/commerce.db') {
   if (path !== ':memory:') mkdirSync(dirname(path), { recursive: true });
   const db = new DatabaseSync(path);
@@ -46,6 +47,7 @@ export function database(path = process.env.DB_PATH || './data/commerce.db') {
     CREATE INDEX IF NOT EXISTS idx_orders_expiry ON orders(status,reserved_until);
     CREATE INDEX IF NOT EXISTS idx_sessions_expiry ON sessions(expires_at);
   `);
+  migrate(db);
   return db;
 }
 export function transaction(db, fn) {

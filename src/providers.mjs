@@ -1,5 +1,5 @@
 import { createHmac, timingSafeEqual } from 'node:crypto';
-import { HttpError, requireThat, safeLink } from './security.mjs';
+import { HttpError, requireThat, safeLink, allocateCents } from './security.mjs';
 export function providers(config, fetcher=fetch) {
   const demo=config.mode==='demo';
   async function request(base,path,body,token,extra={},method='POST') {
@@ -25,8 +25,10 @@ export function providers(config, fetcher=fetch) {
     async preference(order, items, customer) {
       if(demo) return {id:`demo-${order.id}`,url:null};
       requireThat(config.mpToken && config.mpSecret && config.collectorId,503,'Configure as credenciais de pagamento antes de vender.');
+      const parts=allocateCents(order.discount||0,items.map(p=>p.price*p.quantity));
+      const paidItems=(order.discount?items.map((p,i)=>({id:p.product_id,title:`${p.quantity} × ${p.name}`,quantity:1,unit_price:(p.price*p.quantity-parts[i])/100,currency_id:'BRL'})).filter(p=>p.unit_price>0):items.map(p=>({id:p.product_id,title:p.name,quantity:p.quantity,unit_price:p.price/100,currency_id:'BRL'})));
       const data=await mp('/checkout/preferences',{
-        external_reference:order.id,items:[...items.map(p=>({id:p.product_id,title:p.name,quantity:p.quantity,unit_price:p.price/100,currency_id:'BRL'})),...(order.shipping?[{id:'shipping',title:'Frete',quantity:1,unit_price:order.shipping/100,currency_id:'BRL'}]:[])],
+        external_reference:order.id,items:[...paidItems,...(order.shipping?[{id:'shipping',title:'Frete',quantity:1,unit_price:order.shipping/100,currency_id:'BRL'}]:[])],
         payer:{email:customer.email},back_urls:{success:`${config.url}/?payment=success#orders`,pending:`${config.url}/?payment=pending#orders`,failure:`${config.url}/?payment=failure#orders`},
         auto_return:'approved',notification_url:`${config.url}/api/webhooks/mercadopago`,expires:true,
         expiration_date_from:new Date(order.created_at).toISOString(),expiration_date_to:new Date(order.reserved_until).toISOString()

@@ -47,7 +47,28 @@ export function safeLink(value) {
 }
 export const roles = ['customer','admin','inventory','finance','shipping','support'];
 export const permissions = {
-  admin:['dashboard','catalog','stock','orders','finance','shipping','users','audit'],
-  inventory:['dashboard','catalog','stock','orders'], finance:['dashboard','orders','finance'],
+  admin:['dashboard','catalog','stock','orders','finance','shipping','users','audit','coupons','invoices'],
+  inventory:['dashboard','catalog','stock','orders'], finance:['dashboard','orders','finance','coupons','invoices'],
   shipping:['dashboard','orders','shipping'], support:['dashboard','orders'], customer:[]
 };
+
+export function fiscalFields(input={}) {
+  requireThat(input && typeof input==='object' && !Array.isArray(input) && JSON.stringify(input).length<=12000,400,'Dados fiscais inválidos.');
+  const output={};
+  for(const [key,value] of Object.entries(input)) {
+    requireThat(/^(codigo_ncm|cfop|unidade_comercial|unidade_tributavel|codigo_cest|codigo_beneficio_fiscal|icms_[a-z_]+|pis_[a-z_]+|cofins_[a-z_]+|ipi_[a-z_]+|ibs_[a-z_]+|cbs_[a-z_]+)$/.test(key),400,`Campo fiscal não permitido: ${key}`);
+    requireThat((typeof value==='string' && value.length<=250) || (typeof value==='number' && Number.isFinite(value) && value>=0),400,`Valor fiscal inválido: ${key}`);
+    output[key]=value;
+  }
+  if(output.codigo_ncm) requireThat(/^\d{8}$/.test(String(output.codigo_ncm)),400,'NCM deve conter 8 dígitos.');
+  if(output.cfop)requireThat(/^\d{4}$/.test(String(output.cfop)),400,'CFOP deve conter 4 dígitos.');
+  return output;
+}
+export function allocateCents(amount,weights) {
+  const total=weights.reduce((s,w)=>s+BigInt(w),0n);if(!amount || !total)return weights.map(()=>0);
+  const parts=weights.map(w=>({value:Number(BigInt(amount)*BigInt(w)/total),remainder:BigInt(amount)*BigInt(w)%total}));
+  let left=amount-parts.reduce((s,p)=>s+p.value,0);
+  const sorted=parts.map((p,i)=>({...p,i})).sort((a,b)=>a.remainder===b.remainder?a.i-b.i:a.remainder>b.remainder?-1:1);
+  for(let i=0;i<left;i++)parts[sorted[i].i].value++;
+  return parts.map(p=>p.value);
+}
