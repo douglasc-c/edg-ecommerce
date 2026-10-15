@@ -2,9 +2,8 @@
 export function migrate(db) {
   const current=db.prepare('SELECT MAX(version) v FROM schema_version').get().v;
   if(current>=2)return;
-  db.exec('BEGIN IMMEDIATE');
-  try {
-    if(db.prepare('SELECT MAX(version) v FROM schema_version').get().v>=2){db.exec('COMMIT');return;}
+  const apply=()=>{
+    if(db.prepare('SELECT MAX(version) v FROM schema_version').get().v>=2){return;}
     db.exec(`
       ALTER TABLE products ADD COLUMN images TEXT NOT NULL DEFAULT '[]';
       ALTER TABLE products ADD COLUMN fiscal TEXT NOT NULL DEFAULT '{}';
@@ -32,6 +31,8 @@ export function migrate(db) {
         cancel_reason TEXT, created_at TEXT NOT NULL, updated_at TEXT NOT NULL);
       INSERT INTO schema_version VALUES(2);
     `);
-    db.exec('COMMIT');
-  } catch(error){db.exec('ROLLBACK');throw error;}
+  };
+  if(db.transactionSync)return db.transactionSync(apply);
+  db.exec('BEGIN IMMEDIATE');
+  try {apply();db.exec('COMMIT');}catch(error){db.exec('ROLLBACK');throw error;}
 }

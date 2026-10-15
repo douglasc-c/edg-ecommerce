@@ -9,3 +9,7 @@ coverage/
 *.db-wal
 playwright-report/
 test-results/
+
+.wrangler/
+.dev.vars
+.dev.vars.*

@@ -1,3 +1,5 @@
+> **Cloudflare sem credenciais bancárias:** veja [CLOUDFLARE.md](CLOUDFLARE.md) para publicar o catálogo e preparar produtos/estoque reais com checkout bloqueado.
+
 # EDG Commerce
 
 Loja virtual e painel de operação integrados: catálogo, carrinho persistente, checkout, pedidos, estoque, financeiro, expedição e usuários com permissões por função. Interface em português, responsiva, com área do cliente e área de gestão.

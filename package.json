@@ -12,12 +12,19 @@
     "seed": "node --env-file-if-exists=.env src/seed.mjs",
     "test": "node --test test/*.test.mjs",
     "check": "node --check src/server.mjs && node --check public/app.js",
-    "test:ui": "playwright test"
+    "test:ui": "playwright test",
+    "dev:cloudflare": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "check:cloudflare": "wrangler deploy --dry-run",
+    "test:cloudflare": "node test/cloudflare-smoke.mjs"
   },
   "devDependencies": {
-    "@playwright/test": "1.64.0"
+    "@playwright/test": "1.64.0",
+    "miniflare": "5.20261012.0-beta",
+    "wrangler": "4.151.0"
   },
   "dependencies": {
+    "jpeg-js": "^0.4.4",
     "sharp": "0.35.5"
   }
 }
