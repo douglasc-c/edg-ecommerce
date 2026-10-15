@@ -14,13 +14,16 @@ export function configuration(env=process.env) {
   Object.assign(c,{resendKey:env.RESEND_API_KEY,emailFrom:env.EMAIL_FROM,emailKey:env.EMAIL_ENCRYPTION_KEY,nfeToken:env.FOCUS_NFE_TOKEN,nfeEnvironment:env.NFE_ENVIRONMENT||'homologation',nfeEmitter:env.NFE_EMITTER_JSON?JSON.parse(env.NFE_EMITTER_JSON):null,nfeDefaults:env.NFE_DEFAULTS_JSON?JSON.parse(env.NFE_DEFAULTS_JSON):null});
   requireThat(['homologation','production'].includes(c.nfeEnvironment),500,'NFE_ENVIRONMENT inválido.');
   requireThat(!c.emailKey || /^[a-f0-9]{64}$/i.test(c.emailKey),500,'EMAIL_ENCRYPTION_KEY deve ter 32 bytes em hexadecimal.');
-  requireThat(['demo','live'].includes(c.mode),500,'COMMERCE_MODE deve ser demo ou live.');
+  requireThat(['demo','catalog','live'].includes(c.mode),500,'COMMERCE_MODE deve ser demo, catalog ou live.');
   requireThat(Number.isInteger(c.reservationMinutes) && c.reservationMinutes>=5 && c.reservationMinutes<=1440,500,'RESERVATION_MINUTES inválido.');
   const u=new URL(c.url); requireThat(['http:','https:'].includes(u.protocol) && u.pathname==='/' && !u.search && !u.hash && !u.username && !u.password,500,'APP_URL deve ser uma origem HTTP válida.');
-  if(c.production) requireThat(c.mode==='live' && u.protocol==='https:' && c.mpToken && c.mpSecret && c.collectorId && c.meToken && c.originPostal && c.supportEmail && !c.meSandbox,500,'Produção exige HTTPS, modo live e credenciais completas de produção.');
+  if(c.production) requireThat(u.protocol==='https:' && (c.mode==='catalog' || (c.mode==='live' && c.mpToken && c.mpSecret && c.collectorId && c.meToken && c.originPostal && c.supportEmail && !c.meSandbox)),500,'Produção exige HTTPS e modo catalog ou modo live com credenciais completas.');
+  requireThat(['BRL','EUR'].includes(env.STORE_CURRENCY||'BRL'),500,'STORE_CURRENCY inválida.');
+  c.currency=env.STORE_CURRENCY||'BRL';
+  if(c.mode!=='catalog')requireThat(c.currency==='BRL',500,'Checkout em EUR aguarda integração europeia. Use modo catalog.');
   return c;
 }
-export function createApp({db=database(),config=configuration(),provider=providers(config),mailer=emailProvider(config),fiscal=fiscalProvider(config)}={}) {
+export function createApp({db=database(),config=configuration(),provider=providers(config),mailer=emailProvider(config),fiscal=fiscalProvider(config),runtime='node'}={}) {
   const shop=commerce(db,config,provider), buckets=new Map();
   const recovery=passwordRecovery(db,config,mailer),invoices=invoiceService(db,config,fiscal,shop);
   const get=(sql,...args)=>db.prepare(sql).get(...args), run=(sql,...args)=>db.prepare(sql).run(...args);
@@ -65,9 +68,10 @@ export function createApp({db=database(),config=configuration(),provider=provide
     }
     const respond=(data,status=200)=>{res.writeHead(status,{'Content-Type':'application/json; charset=utf-8','Cache-Control':'no-store'});res.end(JSON.stringify(sanitize(data)));};
     if(path==='/api/health' && method==='GET') return respond({status:'ok'});
-    if(path==='/api/config' && method==='GET') return respond({name:config.storeName,mode:config.mode,payment:'Mercado Pago',shipping:'Melhor Envio',fiscal_environment:config.mode==='demo'?'demo':config.nfeEnvironment,email_enabled:config.mode==='demo'||Boolean(config.resendKey&&config.emailFrom&&config.emailKey)});
+    if(path==='/api/config' && method==='GET') return respond({name:config.storeName,mode:config.mode,currency:config.currency||'BRL',checkout_enabled:config.mode!=='catalog',payment:'Mercado Pago',shipping:'Melhor Envio',fiscal_environment:config.mode==='demo'?'demo':config.nfeEnvironment,email_enabled:config.mode==='demo'||Boolean(config.resendKey&&config.emailFrom&&config.emailKey)});
     if(path==='/api/products' && method==='GET') {shop.expire(); return respond(shop.products());}
     if(path==='/api/auth/me' && method==='GET') {const u=session(req,false);return respond({user:u?publicUser(u):null,csrf:u?.csrf||null});}
+    if(config.mode==='catalog' && ((path.startsWith('/api/webhooks/')) || (method!=='GET' && (path.startsWith('/api/cart/') || path==='/api/shipping/quote' || path==='/api/checkout' || /^\/api\/orders\/[^/]+\/(demo-pay|payment)$/.test(path)))))throw new HttpError(503,'Loja em preparação. Compras ainda não disponíveis.');
     if(path==='/api/webhooks/melhorenvio' && method==='POST') {
       limited(req,'shipping-webhook',120); let size=0;const chunks=[];
       for await(const chunk of req){size+=chunk.length;requireThat(size<=65536,413,'Solicitação muito grande.');chunks.push(chunk);}
@@ -166,7 +170,7 @@ export function createApp({db=database(),config=configuration(),provider=provide
     }
     throw new HttpError(404,'Rota não encontrada.');
   }
-  const server=createServer(async(req,res)=>{
+  const handler=async(req,res)=>{
     res.setHeader('X-Content-Type-Options','nosniff');res.setHeader('X-Frame-Options','DENY');res.setHeader('Referrer-Policy','same-origin');
     res.setHeader('Content-Security-Policy',"default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'");
     if(config.production) res.setHeader('Strict-Transport-Security','max-age=31536000');
@@ -185,13 +189,15 @@ export function createApp({db=database(),config=configuration(),provider=provide
       if(status===500) console.error('Request failed:',e.name,e.code||'internal');
       res.writeHead(status,{'Content-Type':'application/json; charset=utf-8','Cache-Control':'no-store'});res.end(JSON.stringify({error:status===500?'Erro interno. Tente novamente.':e.message}));
     }
-  });
+  };
+  if(runtime==='worker') return {handler,db,shop,recovery,invoices};
+  const server=createServer(handler);
   server.requestTimeout=20000;server.headersTimeout=10000;
   const maintenance=setInterval(()=>{try{shop.expire();recovery.flush().catch(()=>console.error('Email maintenance failed'));}catch(e){console.error('Reservation maintenance failed:',e.code||e.name);}},60000);maintenance.unref();
   server.on('close',()=>clearInterval(maintenance));
   return {server,db,shop,recovery,invoices};
 }
-if(process.argv[1]===fileURLToPath(import.meta.url)) {
+if(import.meta.url && process.argv[1]===fileURLToPath(import.meta.url)) {
   const app=createApp();app.shop.expire(); const port=Number(process.env.PORT||3000);
   app.server.listen(port,process.env.HOST||'127.0.0.1',()=>console.log(`EDG Commerce em ${process.env.APP_URL||`http://localhost:${port}`}`));
   for(const signal of ['SIGINT','SIGTERM']) process.on(signal,()=>app.server.close(()=>{app.db.close();process.exit(0);}));
