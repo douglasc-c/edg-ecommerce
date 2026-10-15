@@ -43,5 +43,8 @@ export function initialize(db) {
     CREATE INDEX IF NOT EXISTS idx_sessions_expiry ON sessions(expires_at);
   `);
   migrate(db);
+  db.exec(`CREATE TABLE IF NOT EXISTS categories(name TEXT PRIMARY KEY COLLATE NOCASE);
+    INSERT OR IGNORE INTO categories(name) SELECT DISTINCT category FROM products;`);
+  db.exec("INSERT OR IGNORE INTO categories(name) VALUES('Boné'),('Camiseta'),('Moletom'),('Shape');");
   return db;
 }

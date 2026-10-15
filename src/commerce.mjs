@@ -1,3 +1,4 @@
+import { categorySizes } from './product-sizes.mjs';
 import { randomUUID } from 'node:crypto';
 import { transaction } from './db.mjs';
 import { coupons } from './coupons.mjs';
@@ -22,7 +23,7 @@ export function commerce(db,config,provider) {
   function rawCart(userId) {return all('SELECT p.*,c.quantity FROM carts c JOIN products p ON p.id=c.product_id WHERE user_id=? ORDER BY p.id',userId);}
   function fingerprint(items) {return hash(JSON.stringify(items.map(p=>[p.id,p.price,p.quantity,p.active,p.weight,p.width,p.height,p.length])));}
   function validCart(items) {requireThat(items.length>0 && items.length<=100,400,'O carrinho está vazio ou excede o limite.'); for(const p of items) requireThat(p.active && p.stock-p.reserved>=p.quantity,409,`Estoque insuficiente para ${p.name}.`);}
-  function publicProduct(p) {return {id:p.id,sku:p.sku,name:p.name,description:p.description,category:p.category,price:p.price,available:p.stock-p.reserved,color:p.color,icon:p.icon,images:JSON.parse(p.images).map(id=>`/media/${id}.jpg`)};}
+  function publicProduct(p) {return {id:p.id,sku:p.sku,name:p.name,description:p.description,category:p.category,size:p.size,price:p.price,available:p.stock-p.reserved,color:p.color,icon:p.icon,images:JSON.parse(p.images).map(id=>`/media/${id}.jpg`)};}
   function order(id,user=null,manage=false) {
     const o=one('SELECT o.*,u.name customer_name,u.email customer_email FROM orders o JOIN users u ON u.id=o.user_id WHERE o.id=?',id);
     requireThat(o && (manage || !user || o.user_id===user.id),404,'Pedido não encontrado.');
@@ -179,13 +180,37 @@ export function commerce(db,config,provider) {
       requireThat(o.status==='awaiting_payment',409,'Pedido fora do prazo de pagamento.');
       return applyPayment({id:`demo-${id}`,external_reference:id,currency_id:'BRL',transaction_amount:o.total/100,status:'approved'});
     },
+    categories() {return all('SELECT name FROM categories UNION SELECT category AS name FROM products ORDER BY name COLLATE NOCASE').map(c=>({...c,sizes:categorySizes(c.name)}));},
+    saveCategory(user,input) {
+      const name=text(input.name,'Categoria',1,80);
+      const previous=input.previous===undefined?null:text(input.previous,'Categoria anterior',1,80);
+      return transaction(db,()=>{
+        const exists=one('SELECT name FROM categories WHERE name=? COLLATE NOCASE UNION SELECT category AS name FROM products WHERE category=? COLLATE NOCASE',name,name);
+        requireThat(!exists || (previous && exists.name.toLowerCase()===previous.toLowerCase()),409,'Categoria já cadastrada.');
+        if(previous){
+          requireThat(this.categories().some(c=>c.name===previous),404,'Categoria não encontrada.');
+          run('DELETE FROM categories WHERE name=?',previous);
+          run('UPDATE products SET category=? WHERE category=?',name,previous);
+        }
+        run('INSERT INTO categories(name) VALUES(?)',name);
+        audit(user.id,previous?'category.rename':'category.create',name,{previous});
+        return {name};
+      });
+    },
     saveProduct(user,input,id=null) {
       const p={sku:text(input.sku,'SKU',1,50),name:text(input.name,'Nome',2,120),description:text(input.description,'Descrição',1,2000),category:text(input.category,'Categoria',1,80),price:integer(input.price,'Preço em centavos',1),cost:integer(input.cost,'Custo em centavos'),low_stock:integer(input.low_stock,'Estoque mínimo',0,10000),weight:positive(input.weight,'Peso'),width:positive(input.width,'Largura'),height:positive(input.height,'Altura'),length:positive(input.length,'Comprimento'),color:text(input.color,'Cor',7,7),icon:text(input.icon,'Símbolo',1,8),active:input.active===false?0:1};
+      if(input.size!==undefined){
+        p.size=typeof input.size==='string'?input.size.trim():null;
+        requireThat(p.size!==null && p.size.length<=30,400,'Tamanho inválido.');
+        const sizes=categorySizes(p.category);
+        requireThat(!sizes.length || sizes.includes(p.size),400,'Selecione um tamanho válido para a categoria.');
+      }
       if(input.images!==undefined)p.images=photoIds(db,input.images);
       if(input.fiscal!==undefined)p.fiscal=JSON.stringify(fiscalFields(input.fiscal));
       requireThat(/^#[a-fA-F0-9]{6}$/.test(p.color),400,'Cor inválida.');
       requireThat(!one('SELECT id FROM products WHERE sku=? AND id!=?',p.sku,id||''),409,'SKU já cadastrado.');
       return transaction(db,()=>{
+        run('INSERT OR IGNORE INTO categories(name) VALUES(?)',p.category);
         if(id) {requireThat(one('SELECT id FROM products WHERE id=?',id),404,'Produto não encontrado.'); run(`UPDATE products SET ${Object.keys(p).map(k=>`${k}=?`).join(',')} WHERE id=?`,...Object.values(p),id);}
         else {id=randomUUID(); run(`INSERT INTO products(id,${Object.keys(p).join(',')},created_at) VALUES(${Array(Object.keys(p).length+2).fill('?').join(',')})`,id,...Object.values(p),now());}
         audit(user.id,'product.save',id); return one('SELECT * FROM products WHERE id=?',id);

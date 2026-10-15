@@ -1,0 +1,19 @@
+services:
+  app:
+    build: .
+    ports:
+      - "127.0.0.1:3000:3000"
+    env_file: .env
+    environment:
+      NODE_ENV: development
+      HOST: 0.0.0.0
+      PORT: 3000
+      APP_URL: http://localhost:3000
+      DB_PATH: /data/commerce.db
+      COMMERCE_MODE: demo
+    volumes:
+      - commerce-data:/data
+    command: ["sh", "-c", "node src/seed.mjs && node src/server.mjs"]
+
+volumes:
+  commerce-data:

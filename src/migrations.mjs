@@ -1,5 +1,5 @@
 // Migrações incrementais: executadas em transação e preservam dados da versão anterior.
-export function migrate(db) {
+function migrateV2(db) {
   const current=db.prepare('SELECT MAX(version) v FROM schema_version').get().v;
   if(current>=2)return;
   const apply=()=>{
@@ -35,4 +35,15 @@ export function migrate(db) {
   if(db.transactionSync)return db.transactionSync(apply);
   db.exec('BEGIN IMMEDIATE');
   try {apply();db.exec('COMMIT');}catch(error){db.exec('ROLLBACK');throw error;}
+}
+
+export function migrate(db) {
+  migrateV2(db);
+  const apply=()=>{
+    if(db.prepare('SELECT MAX(version) v FROM schema_version').get().v>=3)return;
+    db.exec("ALTER TABLE products ADD COLUMN size TEXT NOT NULL DEFAULT ''; INSERT INTO schema_version VALUES(3);");
+  };
+  if(db.transactionSync)return db.transactionSync(apply);
+  db.exec('BEGIN IMMEDIATE');
+  try{apply();db.exec('COMMIT');}catch(error){db.exec('ROLLBACK');throw error;}
 }

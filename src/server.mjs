@@ -141,6 +141,8 @@ export function createApp({db=database(),config=configuration(),provider=provide
     if((match=path.match(/^\/api\/admin\/orders\/([^/]+)\/invoice-preview$/)) && method==='GET') {allowed(user,'invoices');return respond(invoices.preview(user,match[1]));}
     if((match=path.match(/^\/api\/admin\/orders\/([^/]+)\/invoice$/)) && method==='POST') {allowed(user,'invoices');const b=await body(req),id=match[1];return respond(b.action==='consult'?await invoices.consult(user,id):b.action==='cancel'?await invoices.cancel(user,id,b.reason):b.action==='emit'?await invoices.emit(user,id,b.fiscal||{}):(()=>{throw new HttpError(400,'Ação fiscal inválida.');})());}
     if(path==='/api/admin/dashboard' && method==='GET') {allowed(user,'dashboard');return respond(shop.dashboard(user));}
+    if(path==='/api/admin/categories' && method==='GET') {allowed(user,'catalog');return respond(shop.categories());}
+    if(path==='/api/admin/categories' && method==='POST') {allowed(user,'catalog');return respond(shop.saveCategory(user,await body(req)),201);}
     if(path==='/api/admin/products' && method==='GET') {allowed(user,'catalog');return respond(shop.products(true));}
     if(path==='/api/admin/products' && method==='POST') {allowed(user,'catalog');return respond(shop.saveProduct(user,await body(req)),201);}
     if((match=path.match(/^\/api\/admin\/products\/([^/]+)$/)) && method==='PUT') {allowed(user,'catalog');return respond(shop.saveProduct(user,await body(req),match[1]));}
@@ -179,10 +181,10 @@ export function createApp({db=database(),config=configuration(),provider=provide
       if(url.pathname.startsWith('/api/')) return await route(req,res,url);
       requireThat(req.method==='GET' || req.method==='HEAD',405,'Método não permitido.');
       if(/^\/media\/[a-f0-9]{64}\.jpg$/.test(url.pathname)){const id=url.pathname.slice(7,-4),photo=db.prepare('SELECT data FROM media WHERE id=?').get(id);requireThat(photo,404,'Foto não encontrada.');res.writeHead(200,{'Content-Type':'image/jpeg','Cache-Control':'public, max-age=31536000, immutable'});return res.end(req.method==='HEAD'?undefined:Buffer.from(photo.data));}
-      const files={'/':'index.html','/app.js':'app.js','/styles.css':'styles.css','/favicon.svg':'favicon.svg'};
+      const files={'/':'index.html','/app.js':'app.js','/styles.css':'styles.css','/favicon.svg':'favicon.svg','/edg-logo.png':'edg-logo.png'};
       const filename=files[url.pathname];requireThat(filename,404,'Página não encontrada.');
       const content=await readFile(new URL(`../public/${filename}`,import.meta.url));
-      res.writeHead(200,{'Content-Type':filename.endsWith('html')?'text/html; charset=utf-8':filename.endsWith('css')?'text/css; charset=utf-8':filename.endsWith('js')?'text/javascript; charset=utf-8':'image/svg+xml','Cache-Control':'no-cache'});res.end(req.method==='HEAD'?undefined:content);
+      res.writeHead(200,{'Content-Type':filename.endsWith('html')?'text/html; charset=utf-8':filename.endsWith('css')?'text/css; charset=utf-8':filename.endsWith('js')?'text/javascript; charset=utf-8':filename.endsWith('png')?'image/png':'image/svg+xml','Cache-Control':'no-cache'});res.end(req.method==='HEAD'?undefined:content);
     }catch(e) {
       if(res.headersSent) return res.end();
       const status=e instanceof HttpError?e.status:500;

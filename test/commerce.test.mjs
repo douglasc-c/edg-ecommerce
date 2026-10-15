@@ -27,3 +27,31 @@ test('HTTP: autenticação, CSRF, isolamento entre clientes e permissões no ser
 test('atualização de envio muda status sem permitir regressão e sem duplicar eventos',async t=>{const f=fixture(t),{order:o}=await buy(f);f.shop.demoPay(f.user,o.id);f.db.prepare('UPDATE orders SET label_id=? WHERE id=?').run('label-123',o.id);f.shop.applyTracking('label-123',{status:'posted',tracking:'BR123',tracking_url:'https://example.com/track'});assert.equal(f.shop.order(o.id).status,'shipped');f.shop.applyTracking('label-123',{status:'delivered',tracking:'BR123'});const count=f.shop.order(o.id).events.length;f.shop.applyTracking('label-123',{status:'delivered',tracking:'BR123'});assert.equal(f.shop.order(o.id).events.length,count);f.shop.applyTracking('label-123',{status:'posted',tracking:'BR123'});assert.equal(f.shop.order(o.id).status,'delivered');assert.equal(JSON.parse(f.shop.order(o.id).shipping_data).status,'delivered');});
 test('webhook Melhor Envio valida HMAC base64 sobre corpo original',()=>{const c={...config,mode:'live',meSecret:'shipping-secret'},p=providers(c);const raw=Buffer.from('{"event":"order.posted","data":{"id":"label","status":"posted"}}');const signature=createHmac('sha256',c.meSecret).update(raw).digest('base64');p.verifyShippingWebhook({'x-me-signature':signature},raw);assert.throws(()=>p.verifyShippingWebhook({'x-me-signature':signature},Buffer.from(raw.toString()+' ')),/Assinatura/);});
 test('pagamento parcialmente estornado bloqueia expedição e liquida somente a diferença',async t=>{const f=fixture(t),{order:o}=await buy(f);f.shop.demoPay(f.user,o.id);const payment={id:`demo-${o.id}`,external_reference:o.id,status:'approved',transaction_amount:o.total/100,transaction_amount_refunded:10,currency_id:'BRL'};f.shop.applyPayment(payment);f.shop.applyPayment(payment);assert.equal(f.shop.order(o.id).refunded,1000);assert.equal(f.shop.ledger().reduce((s,l)=>s+l.amount,0),o.total-1000);assert.throws(()=>f.shop.status(f.admin,o.id,'picking'),/Transição/);await f.shop.refund(f.admin,o.id);assert.equal(f.shop.ledger().reduce((s,l)=>s+l.amount,0),0);assert.equal(product(f).stock,10);});
+
+test('categorias: cadastro independente, renomeação dos produtos e duplicatas',t=>{
+  const {shop,admin,db,p}=fixture(t);
+  assert.ok(shop.categories().some(c=>c.name==='Teste'));
+  shop.saveCategory(admin,{name:'Camisetas'});
+  assert.ok(shop.categories().some(c=>c.name==='Camisetas'));
+  assert.throws(()=>shop.saveCategory(admin,{name:'camisetas'}),/já cadastrada/);
+  shop.saveCategory(admin,{previous:'Teste',name:'Shapes'});
+  assert.equal(db.prepare('SELECT category FROM products WHERE id=?').get(p.id).category,'Shapes');
+  assert.ok(!shop.categories().some(c=>c.name==='Teste'));
+  assert.throws(()=>shop.saveCategory(admin,{previous:'Shapes',name:'Camisetas'}),/já cadastrada/);
+  assert.equal(db.prepare('SELECT category FROM products WHERE id=?').get(p.id).category,'Shapes');
+  assert.throws(()=>shop.saveCategory(admin,{name:'   '}),/Categoria/);
+  assert.throws(()=>shop.saveCategory(admin,{previous:'Inexistente',name:'Nova'}),/não encontrada/);
+});
+
+test('tamanhos por categoria são validados e preservados na edição',t=>{
+  const {shop,admin,p}=fixture(t);
+  for(const [category,size] of [['Boné','Único'],['Camiseta','M'],['Moletom','GG'],['Shape','8.25']]){
+    const saved=shop.saveProduct(admin,{...p,images:[],fiscal:{},category,size},p.id);
+    assert.equal(saved.size,size);
+    assert.equal(shop.products().find(row=>row.id===p.id).size,size);
+    assert.throws(()=>shop.saveProduct(admin,{...saved,images:[],fiscal:{},size:'inválido'},p.id),/tamanho válido/);
+    assert.throws(()=>shop.saveProduct(admin,{...saved,images:[],fiscal:{},size:''},p.id),/tamanho válido/);
+  }
+  assert.ok(shop.categories().find(c=>c.name==='Boné').sizes.includes('Único'));
+  assert.ok(shop.categories().find(c=>c.name==='Shape').sizes.includes('8.25'));
+});

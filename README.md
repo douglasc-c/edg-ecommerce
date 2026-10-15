@@ -24,6 +24,22 @@ Abra http://localhost:3000. Entre com o administrador configurado para acessar a
 
 No modo `demo`, o seed cria seis produtos de exemplo. Pagamentos e fretes são **simulados**, com aviso permanente na interface. O cliente pode simular aprovação no detalhe do pedido; nenhuma transação real é executada. Os produtos de exemplo usam símbolos ilustrativos até que você envie as fotos pelo painel.
 
+## Executar localmente com Docker
+
+Com o Docker Desktop aberto e o `.env` preenchido com `ADMIN_EMAIL` e `ADMIN_PASSWORD` (pelo menos 12 caracteres):
+
+```bash
+docker compose up -d --build
+```
+
+Abra http://localhost:3000. O Compose prepara o administrador e o catálogo automaticamente no modo demo. Os dados ficam no volume persistente `commerce-data`.
+
+```bash
+docker compose logs -f app  # acompanhar logs
+docker compose stop        # parar
+docker compose up -d       # iniciar novamente
+```
+
 ## O que está implementado
 
 | Área | Recursos |
