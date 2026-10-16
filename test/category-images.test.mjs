@@ -160,7 +160,7 @@ for(const existingCategories of [false,true]) {
     if(existingCategories)db.exec("CREATE TABLE categories(name TEXT PRIMARY KEY COLLATE NOCASE); INSERT INTO categories VALUES('Sin productos');");
     initialize(db);
     initialize(db);
-    assert.equal(db.prepare('SELECT MAX(version) version FROM schema_version').get().version,5);
+    assert.equal(db.prepare('SELECT MAX(version) version FROM schema_version').get().version,6);
     const shop=commerce(db,config,providers(config)),legacy=shop.categories().find(row=>row.name==='Heredada');
     assert.equal(legacy.image_id,null);
     assert.equal(legacy.image,null);
