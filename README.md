@@ -4,7 +4,7 @@
 
 Tienda online y panel de operaciones integrados: catálogo, carrito persistente, proceso de compra, pedidos, inventario, finanzas, expedición y usuarios con permisos por función. Interfaz en español de España, adaptable a móviles, con área de cliente y área de gestión.
 
-La traducción de la interfaz no cambia las integraciones: el módulo fiscal actual emite **NF-e brasileñas mediante Focus NFe**. La facturación española y el pago europeo siguen pendientes de integración.
+La traducción de la interfaz no cambia las integraciones fiscales: el módulo actual emite **NF-e brasileñas mediante Focus NFe**. La facturación española y el pago europeo siguen pendientes de integración. El módulo administrativo **Envíos europeos**, con Sendcloud, permite preparar envíos manuales desde Barcelona a España, Alemania, Italia y Portugal; consulta [SENDCLOUD.md](SENDCLOUD.md) para configurarlo primero en modo de prueba local.
 
 ## Ejecutar en local
 
@@ -24,7 +24,7 @@ npm start
 
 Abre http://localhost:3000. Inicia sesión con el administrador configurado para acceder a la gestión. Los clientes crean sus propias cuentas desde la tienda. `npm run seed` se puede repetir y no sustituye las contraseñas existentes.
 
-En modo `demo`, el seed crea seis productos de ejemplo. Los pagos y los envíos son **simulados**, con un aviso permanente en la interfaz. El cliente puede simular la aprobación desde el detalle del pedido; no se realiza ninguna transacción real. Los productos de ejemplo utilizan símbolos ilustrativos hasta que subas las fotos desde el panel.
+En modo `demo`, el seed crea seis productos de ejemplo. Los pagos y los envíos del proceso de compra brasileño son **simulados**, con un aviso permanente en la interfaz. El cliente puede simular la aprobación desde el detalle del pedido; no se realiza ninguna transacción real. Los productos de ejemplo utilizan símbolos ilustrativos hasta que subas las fotos desde el panel.
 
 ## Ejecutar en local con Docker
 
@@ -57,6 +57,7 @@ docker compose up -d       # volver a iniciar
 | Pedidos | Pago, preparación, embalaje, envío, entrega, cancelación, reembolso y cronología |
 | Finanzas | Ingresos confirmados, reembolsos totales y parciales, gastos, saldo y exportación CSV |
 | Expedición | Presupuestos de Melhor Envio, creación de etiquetas comerciales con clave de NF-e, compra del envío, impresión y seguimiento |
+| Envíos europeos | Sendcloud: conexión, consulta de tarifas, simulación local, contratación real con confirmación, etiqueta e historial con seguimiento para envíos manuales |
 | Gestión | Panel de control, perfiles por función, bloqueo de usuarios, revocación de sesiones y auditoría |
 
 ## Permisos
@@ -66,7 +67,7 @@ docker compose up -d       # volver a iniciar
 | Administrador | Todas las operaciones |
 | Inventario | Panel operativo, catálogo, ajustes de inventario y consulta de pedidos |
 | Finanzas | Panel financiero, pedidos, gastos, reembolsos, cupones y emisión fiscal |
-| Expedición | Panel operativo, consulta de pedidos, preparación, embalaje, envío, entrega y etiquetas |
+| Expedición | Panel operativo, consulta de pedidos, preparación, embalaje, envío, entrega, etiquetas y envíos europeos |
 | Atención al cliente | Panel operativo y consulta de pedidos |
 | Cliente | Su carrito y sus propios pedidos |
 
@@ -108,6 +109,14 @@ Las actualizaciones automáticas utilizan `/api/webhooks/melhorenvio`. Configura
 
 La consulta actualiza el código de seguimiento y avanza a enviado o entregado cuando el proveedor confirma la admisión o la entrega. También registra los intentos fallidos y las interrupciones en la cronología. Se puede introducir manualmente un enlace de seguimiento externo para envíos fuera de la integración.
 
+## Envíos europeos: Sendcloud
+
+Configura `SHIPPING_PROVIDER=sendcloud`, `SENDCLOUD_ENVIRONMENT=test`, las claves de API y el ID del remitente de Barcelona. En **Gestión → Envíos europeos**, los perfiles administrador y expedición pueden consultar la conexión, buscar tarifas para un bulto con su peso y tres medidas, y simular el registro del envío. La consulta de remitentes y tarifas utiliza la API real; en `test`, la creación es exclusivamente local, sin anunciar el envío a Sendcloud y sin generar una etiqueta real.
+
+La contratación y la descarga de etiquetas reales requieren `SENDCLOUD_ENVIRONMENT=live`, credenciales válidas y confirmación expresa en la interfaz. El modo de Sendcloud es independiente de `COMMERCE_MODE`: este módulo funciona con el catálogo publicado y **no habilita las compras en EUR**. Los envíos manuales no modifican existencias, reservas, cobros ni apuntes financieros. La integración del envío con el futuro pago europeo es una etapa posterior.
+
+El alcance inicial es Barcelona → España peninsular y Baleares, Alemania, Italia y Portugal; quedan fuera Canarias, Ceuta y Melilla. Los servicios y los precios disponibles dependen de la cuenta, del contrato, del origen, del destino y de las medidas reales. El webhook `/api/webhooks/sendcloud` actualiza únicamente los envíos reales registrados en este módulo. Los detalles de configuración, prueba, producción y recuperación ante respuestas inciertas están en [SENDCLOUD.md](SENDCLOUD.md).
+
 ## Pruebas
 
 ```bash
@@ -115,7 +124,7 @@ npm run check
 npm test
 ```
 
-Las pruebas de API y reglas de negocio utilizan una base de datos en memoria y no llaman a proveedores reales. También se ha ejecutado y superado la prueba de navegador del flujo de compra, expedición, entrega y reposición, con inspección visual en ordenador y móvil. La integración continua también ejecuta el flujo de demostración en un navegador de escritorio y comprueba la navegación en pantalla móvil. Para repetir las pruebas de navegador en local, instala las dependencias de desarrollo y Chromium:
+Las pruebas de API y reglas de negocio utilizan una base de datos en memoria y no llaman a proveedores reales. Las pruebas automáticas de Sendcloud utilizan respuestas controladas; no crean etiquetas ni contratan transporte en la cuenta del proveedor. La validación autenticada de tu cuenta y tus servicios sigue siendo necesaria. También se ha ejecutado y superado la prueba de navegador del flujo de compra, expedición, entrega y reposición, con inspección visual en ordenador y móvil. La integración continua también ejecuta el flujo de demostración en un navegador de escritorio y comprueba la navegación en pantalla móvil. Para repetir las pruebas de navegador en local, instala las dependencias de desarrollo y Chromium:
 
 ```bash
 npm install

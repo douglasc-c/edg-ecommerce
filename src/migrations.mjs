@@ -72,9 +72,36 @@ function migrateV5(db) {
   try{apply();db.exec('COMMIT');}catch(error){db.exec('ROLLBACK');throw error;}
 }
 
+function migrateV6(db) {
+  const apply=()=>{
+    if(db.prepare('SELECT MAX(version) v FROM schema_version').get().v>=6)return;
+    db.exec(`
+      CREATE TABLE europe_quotes(id TEXT PRIMARY KEY,actor_id TEXT NOT NULL REFERENCES users(id),
+        payload TEXT NOT NULL,options TEXT NOT NULL,expires_at TEXT NOT NULL);
+      CREATE TABLE europe_shipments(id TEXT PRIMARY KEY,reference TEXT NOT NULL UNIQUE,order_reference TEXT,
+        quote_id TEXT NOT NULL UNIQUE REFERENCES europe_quotes(id),environment TEXT NOT NULL,
+        status TEXT NOT NULL,destination TEXT NOT NULL,parcel TEXT NOT NULL,service TEXT NOT NULL,
+        price INTEGER NOT NULL CHECK(price>=0),currency TEXT NOT NULL CHECK(currency='EUR'),
+        provider_shipment_id TEXT UNIQUE,provider_parcel_id TEXT,tracking_code TEXT,tracking_url TEXT,
+        last_event_at TEXT,last_error TEXT,request_hash TEXT NOT NULL,idempotency_key TEXT NOT NULL UNIQUE,
+        actor_id TEXT NOT NULL REFERENCES users(id),created_at TEXT NOT NULL,updated_at TEXT NOT NULL);
+      CREATE TABLE europe_shipment_events(id INTEGER PRIMARY KEY,
+        shipment_id TEXT NOT NULL REFERENCES europe_shipments(id),event_key TEXT UNIQUE,
+        status TEXT NOT NULL,message TEXT NOT NULL,created_at TEXT NOT NULL);
+      CREATE INDEX idx_europe_shipments_created ON europe_shipments(created_at);
+      CREATE INDEX idx_europe_shipments_parcel ON europe_shipments(provider_parcel_id);
+      INSERT INTO schema_version VALUES(6);
+    `);
+  };
+  if(db.transactionSync)return db.transactionSync(apply);
+  db.exec('BEGIN IMMEDIATE');
+  try{apply();db.exec('COMMIT');}catch(error){db.exec('ROLLBACK');throw error;}
+}
+
 export function migrate(db) {
   migrateV2(db);
   migrateV3(db);
   migrateV4(db);
   migrateV5(db);
+  migrateV6(db);
 }

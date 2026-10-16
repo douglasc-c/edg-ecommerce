@@ -8,6 +8,8 @@ import { commerce } from './commerce.mjs';
 import { savePhoto } from './media.mjs';
 import { passwordRecovery,emailProvider } from './password-reset.mjs';
 import { fiscalProvider,invoiceService } from './invoices.mjs';
+import { sendcloudProvider } from './sendcloud.mjs';
+import { europeShipping } from './europe-shipping.mjs';
 import { HttpError, requireThat, text, integer, email, postal, passwordHash, passwordMatches, roles, permissions, token, hash, now } from './security.mjs';
 export function configuration(env=process.env) {
   const c={url:(env.APP_URL||'http://localhost:3000').replace(/\/$/,''),mode:env.COMMERCE_MODE||'demo',production:env.NODE_ENV==='production',reservationMinutes:Number(env.RESERVATION_MINUTES||30),storeName:env.STORE_NAME||'EDG Commerce',mpToken:env.MERCADO_PAGO_ACCESS_TOKEN,mpSecret:env.MERCADO_PAGO_WEBHOOK_SECRET,collectorId:env.MERCADO_PAGO_COLLECTOR_ID,meToken:env.MELHOR_ENVIO_TOKEN,meSecret:env.MELHOR_ENVIO_WEBHOOK_SECRET,meSandbox:env.MELHOR_ENVIO_SANDBOX!=='false',originPostal:env.ORIGIN_POSTAL_CODE,supportEmail:env.SUPPORT_EMAIL,shippingFrom:env.SHIPPING_FROM_JSON?JSON.parse(env.SHIPPING_FROM_JSON):null};
@@ -20,12 +22,20 @@ export function configuration(env=process.env) {
   if(c.production) requireThat(u.protocol==='https:' && (c.mode==='catalog' || (c.mode==='live' && c.mpToken && c.mpSecret && c.collectorId && c.meToken && c.originPostal && c.supportEmail && !c.meSandbox)),500,'La producción requiere HTTPS y el modo catalog, o el modo live con las credenciales completas.');
   requireThat(['BRL','EUR'].includes(env.STORE_CURRENCY||'BRL'),500,'STORE_CURRENCY no válida.');
   c.currency=env.STORE_CURRENCY||'BRL';
+  c.shippingProvider=env.SHIPPING_PROVIDER||(c.currency==='EUR'?'sendcloud':'melhorenvio');
+  requireThat(['sendcloud','melhorenvio'].includes(c.shippingProvider),500,'SHIPPING_PROVIDER debe ser sendcloud o melhorenvio.');
+  c.sendcloud={environment:env.SENDCLOUD_ENVIRONMENT||'test',publicKey:env.SENDCLOUD_PUBLIC_KEY,
+    secretKey:env.SENDCLOUD_SECRET_KEY,webhookSecret:env.SENDCLOUD_WEBHOOK_SECRET||env.SENDCLOUD_SECRET_KEY,
+    senderAddressId:env.SENDCLOUD_SENDER_ADDRESS_ID===undefined?undefined:String(env.SENDCLOUD_SENDER_ADDRESS_ID).trim()};
+  requireThat(['test','live'].includes(c.sendcloud.environment),500,'SENDCLOUD_ENVIRONMENT debe ser test o live.');
+  requireThat(!c.sendcloud.senderAddressId||/^[1-9]\d{0,14}$/.test(String(c.sendcloud.senderAddressId)),500,'SENDCLOUD_SENDER_ADDRESS_ID debe ser un identificador numérico positivo.');
   if(c.mode!=='catalog')requireThat(c.currency==='BRL',500,'El checkout en EUR está pendiente de la integración europea. Usa el modo catalog.');
   return c;
 }
-export function createApp({db=database(),config=configuration(),provider=providers(config),mailer=emailProvider(config),fiscal=fiscalProvider(config),runtime='node'}={}) {
+export function createApp({db=database(),config=configuration(),provider=providers(config),mailer=emailProvider(config),fiscal=fiscalProvider(config),europeProvider=sendcloudProvider(config),runtime='node'}={}) {
   const shop=commerce(db,config,provider), buckets=new Map();
   const recovery=passwordRecovery(db,config,mailer),invoices=invoiceService(db,config,fiscal,shop);
+  const europe=europeShipping(db,config,europeProvider);
   const get=(sql,...args)=>db.prepare(sql).get(...args), run=(sql,...args)=>db.prepare(sql).run(...args);
   function limited(req,name,limit=30) {
     const key=`${name}:${req.socket.remoteAddress}`, time=Date.now(); let bucket=buckets.get(key);
@@ -68,10 +78,17 @@ export function createApp({db=database(),config=configuration(),provider=provide
     }
     const respond=(data,status=200)=>{res.writeHead(status,{'Content-Type':'application/json; charset=utf-8','Cache-Control':'no-store'});res.end(JSON.stringify(sanitize(data)));};
     if(path==='/api/health' && method==='GET') return respond({status:'ok'});
-    if(path==='/api/config' && method==='GET') return respond({name:config.storeName,mode:config.mode,language:'es',locale:'es-ES',currency:config.currency||'BRL',checkout_enabled:config.mode!=='catalog',payment:'Mercado Pago',shipping:'Melhor Envio',fiscal_environment:config.mode==='demo'?'demo':config.nfeEnvironment,email_enabled:config.mode==='demo'||Boolean(config.resendKey&&config.emailFrom&&config.emailKey)});
+    if(path==='/api/config' && method==='GET') return respond({name:config.storeName,mode:config.mode,language:'es',locale:'es-ES',currency:config.currency||'BRL',checkout_enabled:config.mode!=='catalog',payment:config.currency==='EUR'?'Pendiente de integración':'Mercado Pago',shipping:config.shippingProvider==='sendcloud'?'Sendcloud':'Melhor Envio',shipping_provider:config.shippingProvider,shipping_environment:config.sendcloud?.environment||'test',fiscal_environment:config.mode==='demo'?'demo':config.nfeEnvironment,email_enabled:config.mode==='demo'||Boolean(config.resendKey&&config.emailFrom&&config.emailKey)});
     if(path==='/api/products' && method==='GET') {shop.expire(); return respond(shop.products());}
     if(path==='/api/categories' && method==='GET') return respond(shop.categories().map(({name,image})=>({name,image})));
     if(path==='/api/auth/me' && method==='GET') {const u=session(req,false);return respond({user:u?publicUser(u):null,csrf:u?.csrf||null});}
+    if(path==='/api/webhooks/sendcloud' && method==='POST') {
+      requireThat(config.shippingProvider==='sendcloud',503,'La integración Sendcloud no está activada.');
+      limited(req,'sendcloud-webhook',120);
+      let size=0;const chunks=[];
+      for await(const chunk of req){size+=chunk.length;requireThat(size<=262144,413,'Solicitud demasiado grande.');chunks.push(chunk);}
+      return respond(await europe.webhook(req.headers,Buffer.concat(chunks)));
+    }
     if(config.mode==='catalog' && ((path.startsWith('/api/webhooks/')) || (method!=='GET' && (path.startsWith('/api/cart/') || path==='/api/shipping/quote' || path==='/api/checkout' || /^\/api\/orders\/[^/]+\/(demo-pay|payment)$/.test(path)))))throw new HttpError(503,'Tienda en preparación. Las compras aún no están disponibles.');
     if(path==='/api/webhooks/melhorenvio' && method==='POST') {
       limited(req,'shipping-webhook',120); let size=0;const chunks=[];
@@ -133,6 +150,27 @@ export function createApp({db=database(),config=configuration(),provider=provide
       return respond(action==='cancel'?shop.cancel(user,id):action==='demo-pay'?shop.demoPay(user,id):await shop.paymentLink(user,id));
     }
     requireThat(path.startsWith('/api/admin/'),404,'Ruta no encontrada.');
+    if(path.startsWith('/api/admin/europe-shipping/')) {
+      allowed(user,'shipping');
+      requireThat(config.shippingProvider==='sendcloud',503,'La integración Sendcloud no está activada.');
+      if(path==='/api/admin/europe-shipping/status' && method==='GET')return respond(europe.status());
+      if(path==='/api/admin/europe-shipping/check' && method==='POST')return respond(await europe.checkConnection());
+      if(path==='/api/admin/europe-shipping/quote' && method==='POST')return respond(await europe.quote(user,await body(req)));
+      if(path==='/api/admin/europe-shipping/shipments' && method==='GET')return respond(europe.list());
+      if(path==='/api/admin/europe-shipping/shipments' && method==='POST')return respond(await europe.create(user,await body(req),req.headers['idempotency-key']),201);
+      const shipmentPath=path.match(/^\/api\/admin\/europe-shipping\/shipments\/([^/]+)(?:\/(sync|label))?$/);
+      if(shipmentPath){
+        const [,id,action]=shipmentPath;
+        if(!action&&method==='GET')return respond(europe.get(id));
+        if(action==='sync'&&method==='POST')return respond(await europe.sync(user,id));
+        if(action==='label'&&method==='GET'){
+          const content=await europe.download(id);
+          res.writeHead(200,{'Content-Type':'application/pdf','Content-Disposition':`attachment; filename="envio-${id.replace(/[^A-Za-z0-9-]/g,'')}.pdf"`,'Cache-Control':'no-store'});
+          return res.end(content);
+        }
+      }
+      throw new HttpError(404,'Ruta de envío no encontrada.');
+    }
     if(path==='/api/admin/media' && method==='POST') {allowed(user,'catalog');let size=0;const chunks=[];for await(const c of req){size+=c.length;requireThat(size<=5*1024*1024,413,'La foto no debe superar los 5 MB.');chunks.push(c);}const result=await savePhoto(db,user,Buffer.concat(chunks),String(req.headers['content-type']||'').split(';')[0]);shop.audit(user.id,'media.upload',result.id);return respond(result,201);}
     if(path==='/api/admin/coupons' && method==='GET') {allowed(user,'coupons');return respond(shop.coupons.list());}
     if(path==='/api/admin/coupons' && method==='POST') {allowed(user,'coupons');return respond(shop.coupons.save(user,await body(req)),201);}
@@ -197,12 +235,12 @@ export function createApp({db=database(),config=configuration(),provider=provide
       res.writeHead(status,{'Content-Type':'application/json; charset=utf-8','Cache-Control':'no-store'});res.end(JSON.stringify({error:status===500?'Error interno. Inténtalo de nuevo.':e.message}));
     }
   };
-  if(runtime==='worker') return {handler,db,shop,recovery,invoices};
+  if(runtime==='worker') return {handler,db,shop,recovery,invoices,europe};
   const server=createServer(handler);
   server.requestTimeout=20000;server.headersTimeout=10000;
   const maintenance=setInterval(()=>{try{shop.expire();recovery.flush().catch(()=>console.error('Error en el mantenimiento de correos'));}catch(e){console.error('Error en el mantenimiento de reservas:',e.code||e.name);}},60000);maintenance.unref();
   server.on('close',()=>clearInterval(maintenance));
-  return {server,db,shop,recovery,invoices};
+  return {server,db,shop,recovery,invoices,europe};
 }
 if(import.meta.url && process.argv[1]===fileURLToPath(import.meta.url)) {
   const app=createApp();app.shop.expire(); const port=Number(process.env.PORT||3000);

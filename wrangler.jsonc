@@ -16,7 +16,9 @@
   "vars": {
     "COMMERCE_MODE": "catalog",
     "STORE_NAME": "EDG Commerce",
-    "STORE_CURRENCY": "EUR"
+    "STORE_CURRENCY": "EUR",
+    "SHIPPING_PROVIDER": "sendcloud",
+    "SENDCLOUD_ENVIRONMENT": "test"
   },
   "observability": { "enabled": true }
 }
