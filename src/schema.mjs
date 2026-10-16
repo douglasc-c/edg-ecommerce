@@ -45,6 +45,7 @@ export function initialize(db) {
   migrate(db);
   db.exec(`CREATE TABLE IF NOT EXISTS categories(name TEXT PRIMARY KEY COLLATE NOCASE);
     INSERT OR IGNORE INTO categories(name) SELECT DISTINCT category FROM products;`);
-  db.exec("INSERT OR IGNORE INTO categories(name) VALUES('Boné'),('Camiseta'),('Moletom'),('Shape');");
+  // Las categorías nuevas se crean en español sin renombrar las categorías existentes.
+  if(!db.prepare('SELECT name FROM categories LIMIT 1').get())db.exec("INSERT OR IGNORE INTO categories(name) VALUES('Gorra'),('Camiseta'),('Sudadera'),('Tabla');");
   return db;
 }

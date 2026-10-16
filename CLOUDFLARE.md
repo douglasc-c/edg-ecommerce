@@ -1,12 +1,12 @@
-# Publicar a loja e preparar estoque sem credenciais bancárias
+# Publicar la tienda y preparar el inventario sin credenciales bancarias
 
-O projeto inclui um Worker pronto para **modo catálogo**, com cadastro real de produtos, fotos, preços, estoque, movimentações e usuários. A vitrine fica disponível e informa “Loja em preparação”. Carrinho, cotação, checkout, pagamento simulado e webhooks de pagamento/envio estão bloqueados na API. Nada é cobrado ou reservado pelo catálogo.
+El proyecto incluye un Worker listo para el **modo catálogo**, con gestión real de productos, fotos, precios, existencias, movimientos y usuarios. El escaparate está disponible e indica «Tienda en preparación». El carrito, los presupuestos, el proceso de compra, el pago simulado y los webhooks de pago y envío están bloqueados en la API. El catálogo no cobra ni reserva nada.
 
-O `wrangler.jsonc` usa `COMMERCE_MODE=catalog` e `STORE_CURRENCY=EUR`. Não é necessário informar credenciais do banco espanhol, Mercado Pago ou Melhor Envio nesta etapa. A integração europeia de checkout e faturação continua pendente; mudar somente para `live` não habilita pagamentos em euros.
+El archivo `wrangler.jsonc` utiliza `COMMERCE_MODE=catalog` y `STORE_CURRENCY=EUR`. En esta etapa no es necesario introducir credenciales del banco español, de Mercado Pago ni de Melhor Envio. La integración europea de pagos y facturación sigue pendiente; cambiar únicamente a `live` no habilita pagos en euros. La traducción al español tampoco cambia el módulo fiscal brasileño de Focus NFe.
 
-## 1. Atualizar o projeto
+## 1. Actualizar el proyecto
 
-Depois de integrar a PR, na pasta do repositório:
+Después de integrar la PR, desde la carpeta del repositorio:
 
 ```bash
 git switch master
@@ -15,19 +15,19 @@ npm ci
 npx wrangler login
 ```
 
-Use Node 24. Se você criou um Worker por um assistente de templates, conecte este repositório: o código e a configuração deste projeto substituem o template.
+Utiliza Node 24. Si has creado un Worker con un asistente de plantillas, conecta este repositorio: el código y la configuración de este proyecto sustituyen a la plantilla.
 
-## 2. Publicar o Worker
+## 2. Publicar el Worker
 
 ```bash
 npm run deploy
 ```
 
-O comando cria o Worker `edg-ecommerce` e seu banco SQLite persistente em um Durable Object. Não é preciso criar D1, preencher `database_id`, criar bucket R2 ou executar seed. As migrações de schema são aplicadas automaticamente. Nenhum produto de exemplo é inserido.
+El comando crea el Worker `edg-ecommerce` y su base de datos SQLite persistente en un Durable Object. No es necesario crear D1, rellenar `database_id`, crear un bucket R2 ni ejecutar el seed. Las migraciones del esquema se aplican automáticamente. No se inserta ningún producto de ejemplo.
 
-Anote a URL HTTPS retornada, por exemplo `https://edg-ecommerce.seu-subdominio.workers.dev`.
+Anota la URL HTTPS devuelta, por ejemplo `https://edg-ecommerce.tu-subdominio.workers.dev`.
 
-## 3. Configurar a URL e o administrador
+## 3. Configurar la URL y el administrador
 
 ```bash
 npx wrangler secret put APP_URL
@@ -35,51 +35,51 @@ npx wrangler secret put ADMIN_EMAIL
 npx wrangler secret put ADMIN_PASSWORD
 ```
 
-Digite cada valor quando o terminal pedir:
+Introduce cada valor cuando lo solicite el terminal:
 
-| Configuração | Valor |
+| Configuración | Valor |
 | --- | --- |
-| `APP_URL` | A URL HTTPS exata do Worker ou domínio próprio, sem caminho. |
-| `ADMIN_EMAIL` | Seu e-mail para entrar na administração. |
-| `ADMIN_PASSWORD` | Uma senha exclusiva com 12 a 128 caracteres. |
+| `APP_URL` | La URL HTTPS exacta del Worker o del dominio propio, sin ruta. |
+| `ADMIN_EMAIL` | Tu correo electrónico para acceder a la administración. |
+| `ADMIN_PASSWORD` | Una contraseña exclusiva de entre 12 y 128 caracteres. |
 
-A URL e o e-mail são guardados como secrets para não serem sobrescritos pelo próximo deploy. Não cole senhas em arquivos ou commits. Antes de configurar os três valores, a vitrine estática pode carregar, mas a API retorna indisponibilidade.
+La URL y el correo electrónico se guardan como secretos para que el siguiente despliegue no los sobrescriba. No pegues contraseñas en archivos ni commits. Antes de configurar los tres valores, el escaparate estático puede cargar, pero la API devuelve un error de disponibilidad.
 
-Abra a loja. O primeiro acesso à API cria o administrador. Entre com o e-mail e a senha e abra **Gestão** (ou `/#admin`). Depois de confirmar o login, pode remover `ADMIN_PASSWORD` com `npx wrangler secret delete ADMIN_PASSWORD`: a conta já está persistida. Alterar esse secret depois não muda a senha de uma conta existente; use “Minha conta” para trocar a senha.
+Abre la tienda. El primer acceso a la API crea el administrador. Inicia sesión con el correo electrónico y la contraseña y abre **Gestión** (o `/#admin`). Tras confirmar el inicio de sesión, puedes eliminar `ADMIN_PASSWORD` con `npx wrangler secret delete ADMIN_PASSWORD`: la cuenta ya está guardada de forma persistente. Cambiar ese secreto después no modifica la contraseña de una cuenta existente; utiliza «Mi cuenta» para cambiarla.
 
-## 4. Preparar produtos e estoque
+## 4. Preparar los productos y el inventario
 
-1. Em **Produtos**, cadastre SKU, nome, categoria, descrição, preço/custo em euros e fotos. Peso e dimensões são preservados para a futura integração logística.
-2. Use **Inativo** para manter um produto fora da vitrine enquanto o prepara.
-3. Em **Estoque**, registre o saldo inicial e reposições com motivo. As movimentações ficam no histórico.
-4. Abra **Ver loja** para revisar a vitrine. Os preços são exibidos em euros, e as compras ficam indisponíveis.
-5. Em **Usuários**, crie acessos da equipe com o perfil adequado. A recuperação por e-mail só fica disponível após configurar Resend, remetente e chave de criptografia.
+1. En **Productos**, registra el SKU, el nombre, la categoría, la descripción, el precio y el coste en euros, y las fotos. El peso y las dimensiones se conservan para la futura integración logística.
+2. Utiliza **Inactivo** para mantener un producto fuera del escaparate mientras lo preparas.
+3. En **Inventario**, registra las existencias iniciales y las reposiciones con un motivo. Los movimientos quedan en el historial.
+4. Abre **Ver tienda** para revisar el escaparate. Los precios se muestran en euros y las compras no están disponibles.
+5. En **Usuarios**, crea accesos para el equipo con el perfil adecuado. La recuperación por correo electrónico solo está disponible después de configurar Resend, el remitente y la clave de cifrado.
 
-O editor aceita JPEG, PNG e WebP até 5 MB; normaliza para JPEG de até 1280 × 1280 antes do envio. O Worker valida e reencoda o JPEG, removendo metadados. Produtos podem ter até oito fotos.
+El editor acepta JPEG, PNG y WebP de hasta 5 MB; normaliza las imágenes a JPEG de hasta 1280 × 1280 antes de enviarlas. El Worker valida y vuelve a codificar el JPEG, eliminando los metadatos. Cada producto puede tener hasta ocho fotos.
 
-## Pelo painel do Cloudflare conectado ao GitHub
+## Desde el panel de Cloudflare conectado a GitHub
 
-Em **Workers & Pages → Create → Import a repository**, selecione `douglasc-c/edg-ecommerce` após integrar a PR.
+En **Workers & Pages → Create → Import a repository**, selecciona `douglasc-c/edg-ecommerce` después de integrar la PR.
 
-| Campo | Configuração |
+| Campo | Configuración |
 | --- | --- |
-| Branch de produção | `master` |
-| Diretório raiz | `/` (raiz do repositório) |
-| Comando de build | `npm ci` |
-| Comando de deploy | `npm run deploy` |
-| Versão Node | `24` |
+| Rama de producción | `master` |
+| Directorio raíz | `/` (raíz del repositorio) |
+| Comando de compilación | `npm ci` |
+| Comando de despliegue | `npm run deploy` |
+| Versión de Node | `24` |
 
-A configuração de bindings está no `wrangler.jsonc`. Depois do primeiro deploy, adicione `APP_URL`, `ADMIN_EMAIL` e `ADMIN_PASSWORD` em **Settings → Variables and Secrets**, como secrets, e aplique as alterações.
+La configuración de los bindings está en `wrangler.jsonc`. Después del primer despliegue, añade `APP_URL`, `ADMIN_EMAIL` y `ADMIN_PASSWORD` en **Settings → Variables and Secrets**, como secretos, y aplica los cambios.
 
-## Persistência, lojas e atualizações
+## Persistencia, tiendas y actualizaciones
 
-Produtos, fotos, contas, sessões, movimentações e pedidos ficam no SQLite do Durable Object. A vitrine é entregue como assets do Worker. Deploys preservam os dados. Mantenha o nome do Worker, a classe `CommerceStore`, o binding `STORE` e o nome interno `primary`: renomeá-los pode apontar para outro banco. Não exclua o Worker/namespace para atualizar a aplicação.
+Los productos, las fotos, las cuentas, las sesiones, los movimientos y los pedidos se guardan en el SQLite del Durable Object. El escaparate se entrega como assets del Worker. Los despliegues conservan los datos. Mantén el nombre del Worker, la clase `CommerceStore`, el binding `STORE` y el nombre interno `primary`: cambiarlos puede apuntar a otra base de datos. No elimines el Worker ni el namespace para actualizar la aplicación.
 
-Essa implantação usa uma loja por Worker. Para Brasil e Europa, publique Workers separados com configurações próprias e dados/estoques isolados. A moeda é uma configuração por loja: alterar `EUR` para `BRL` muda a exibição, não converte valores. Configure a moeda antes de cadastrar o catálogo. A arquitetura atual concentra o banco em um objeto; para volume elevado, reavalie particionamento e imagens em R2.
+Esta implementación utiliza una tienda por Worker. Para Brasil y Europa, publica Workers separados con configuraciones propias y datos e inventarios aislados. La moneda es una configuración por tienda: cambiar `EUR` por `BRL` modifica la visualización, pero no convierte los importes. Configura la moneda antes de registrar el catálogo. La arquitectura actual concentra la base de datos en un objeto; para un volumen elevado, reevalúa el particionado y las imágenes en R2.
 
-O cron a cada cinco minutos processa manutenção e e-mails configurados. Reservas também expiram ao consultar produtos/pedidos. Em catálogo não há novas reservas. Dados locais de testes não são enviados para produção.
+El cron se ejecuta cada cinco minutos y procesa el mantenimiento y los correos electrónicos configurados. Las reservas también caducan al consultar productos o pedidos. En modo catálogo no hay nuevas reservas. Los datos locales de prueba no se envían a producción.
 
-## Validar antes do deploy
+## Validar antes del despliegue
 
 ```bash
 npm run check
@@ -88,6 +88,6 @@ npm run test:cloudflare
 npm run test:ui
 ```
 
-O teste de Workers compila o pacote, executa no runtime do Cloudflare e confirma autenticação, autorização, fotos, produtos, estoque, bloqueio de compras e persistência após reinicialização. Não exige conta Cloudflare.
+La prueba de Workers compila el paquete, lo ejecuta en el runtime de Cloudflare y comprueba la autenticación, la autorización, las fotos, los productos, el inventario, el bloqueo de compras y la persistencia después de reiniciar. No requiere una cuenta de Cloudflare.
 
-Referências: [SQLite em Durable Objects](https://developers.cloudflare.com/durable-objects/api/sqlite-storage-api/), [Wrangler](https://developers.cloudflare.com/workers/wrangler/configuration/).
+Referencias: [SQLite en Durable Objects](https://developers.cloudflare.com/durable-objects/api/sqlite-storage-api/), [Wrangler](https://developers.cloudflare.com/workers/wrangler/configuration/).
