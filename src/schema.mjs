@@ -42,10 +42,10 @@ export function initialize(db) {
     CREATE INDEX IF NOT EXISTS idx_orders_expiry ON orders(status,reserved_until);
     CREATE INDEX IF NOT EXISTS idx_sessions_expiry ON sessions(expires_at);
   `);
+  const initialCatalog=db.prepare('SELECT MAX(version) v FROM schema_version').get().v===1;
   migrate(db);
-  db.exec(`CREATE TABLE IF NOT EXISTS categories(name TEXT PRIMARY KEY COLLATE NOCASE);
-    INSERT OR IGNORE INTO categories(name) SELECT DISTINCT category FROM products;`);
+  db.exec('INSERT OR IGNORE INTO categories(name) SELECT DISTINCT category FROM products WHERE deleted_at IS NULL;');
   // Las categorías nuevas se crean en español sin renombrar las categorías existentes.
-  if(!db.prepare('SELECT name FROM categories LIMIT 1').get())db.exec("INSERT OR IGNORE INTO categories(name) VALUES('Gorra'),('Camiseta'),('Sudadera'),('Tabla');");
+  if(initialCatalog && !db.prepare('SELECT name FROM categories LIMIT 1').get())db.exec("INSERT OR IGNORE INTO categories(name) VALUES('Gorra'),('Camiseta'),('Sudadera'),('Tabla');");
   return db;
 }

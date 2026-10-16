@@ -70,6 +70,7 @@ export function createApp({db=database(),config=configuration(),provider=provide
     if(path==='/api/health' && method==='GET') return respond({status:'ok'});
     if(path==='/api/config' && method==='GET') return respond({name:config.storeName,mode:config.mode,language:'es',locale:'es-ES',currency:config.currency||'BRL',checkout_enabled:config.mode!=='catalog',payment:'Mercado Pago',shipping:'Melhor Envio',fiscal_environment:config.mode==='demo'?'demo':config.nfeEnvironment,email_enabled:config.mode==='demo'||Boolean(config.resendKey&&config.emailFrom&&config.emailKey)});
     if(path==='/api/products' && method==='GET') {shop.expire(); return respond(shop.products());}
+    if(path==='/api/categories' && method==='GET') return respond(shop.categories().map(({name,image})=>({name,image})));
     if(path==='/api/auth/me' && method==='GET') {const u=session(req,false);return respond({user:u?publicUser(u):null,csrf:u?.csrf||null});}
     if(config.mode==='catalog' && ((path.startsWith('/api/webhooks/')) || (method!=='GET' && (path.startsWith('/api/cart/') || path==='/api/shipping/quote' || path==='/api/checkout' || /^\/api\/orders\/[^/]+\/(demo-pay|payment)$/.test(path)))))throw new HttpError(503,'Tienda en preparación. Las compras aún no están disponibles.');
     if(path==='/api/webhooks/melhorenvio' && method==='POST') {
@@ -143,9 +144,11 @@ export function createApp({db=database(),config=configuration(),provider=provide
     if(path==='/api/admin/dashboard' && method==='GET') {allowed(user,'dashboard');return respond(shop.dashboard(user));}
     if(path==='/api/admin/categories' && method==='GET') {allowed(user,'catalog');return respond(shop.categories());}
     if(path==='/api/admin/categories' && method==='POST') {allowed(user,'catalog');return respond(shop.saveCategory(user,await body(req)),201);}
+    if(path==='/api/admin/categories' && method==='DELETE') {allowed(user,'catalog');const b=await body(req);return respond(shop.deleteCategory(user,b.name));}
     if(path==='/api/admin/products' && method==='GET') {allowed(user,'catalog');return respond(shop.products(true));}
     if(path==='/api/admin/products' && method==='POST') {allowed(user,'catalog');return respond(shop.saveProduct(user,await body(req)),201);}
     if((match=path.match(/^\/api\/admin\/products\/([^/]+)$/)) && method==='PUT') {allowed(user,'catalog');return respond(shop.saveProduct(user,await body(req),match[1]));}
+    if((match=path.match(/^\/api\/admin\/products\/([^/]+)$/)) && method==='DELETE') {allowed(user,'catalog');return respond(shop.deleteProduct(user,match[1]));}
     if((match=path.match(/^\/api\/admin\/products\/([^/]+)\/stock$/)) && method==='POST') {allowed(user,'stock');const b=await body(req);return respond(shop.stock(user,match[1],b.delta,b.reason));}
     if(path==='/api/admin/movements' && method==='GET') {allowed(user,'stock');return respond(shop.movements());}
     if(path==='/api/admin/orders' && method==='GET') {allowed(user,'orders');return respond(shop.listOrders(user,true));}
