@@ -14,7 +14,7 @@ button.product-visual{width:100%;border:0;color:var(--ink)}pre{white-space:pre-w
 /* Infinite deck showcase between the campaign and collection. */
 .deck-carousel{background:#101010;color:#fff;padding:64px 0;overflow:hidden}
 .deck-carousel-window{overflow:hidden}
-.deck-carousel-track{display:flex;width:max-content;animation:deck-scroll 64s linear infinite}
+.deck-carousel-track{display:flex;width:max-content;animation:deck-scroll 120s linear infinite}
 .deck-carousel-group{display:flex;align-items:center;gap:48px;padding-right:48px;flex-shrink:0}
 .deck-carousel-group img{display:block;width:clamp(280px,34vw,520px);height:auto;aspect-ratio:4/1;object-fit:contain;border-radius:999px;flex-shrink:0}
 .deck-carousel:hover .deck-carousel-track{animation-play-state:paused}
