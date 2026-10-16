@@ -182,10 +182,10 @@ export function createApp({db=database(),config=configuration(),provider=provide
       if(url.pathname.startsWith('/api/')) return await route(req,res,url);
       requireThat(req.method==='GET' || req.method==='HEAD',405,'Método no permitido.');
       if(/^\/media\/[a-f0-9]{64}\.jpg$/.test(url.pathname)){const id=url.pathname.slice(7,-4),photo=db.prepare('SELECT data FROM media WHERE id=?').get(id);requireThat(photo,404,'Foto no encontrada.');res.writeHead(200,{'Content-Type':'image/jpeg','Cache-Control':'public, max-age=31536000, immutable'});return res.end(req.method==='HEAD'?undefined:Buffer.from(photo.data));}
-      const files={'/':'index.html','/app.js':'app.js','/styles.css':'styles.css','/favicon.svg':'favicon.svg','/edg-logo.png':'edg-logo.png'};
+      const files={'/':'index.html','/app.js':'app.js','/styles.css':'styles.css','/favicon.svg':'favicon.svg','/edg-logo.png':'edg-logo.png','/edg-skate-campaign-960.webp':'edg-skate-campaign-960.webp','/edg-skate-campaign-1600.webp':'edg-skate-campaign-1600.webp'};
       const filename=files[url.pathname];requireThat(filename,404,'Página no encontrada.');
       const content=await readFile(new URL(`../public/${filename}`,import.meta.url));
-      res.writeHead(200,{'Content-Type':filename.endsWith('html')?'text/html; charset=utf-8':filename.endsWith('css')?'text/css; charset=utf-8':filename.endsWith('js')?'text/javascript; charset=utf-8':filename.endsWith('png')?'image/png':'image/svg+xml','Cache-Control':'no-cache'});res.end(req.method==='HEAD'?undefined:content);
+      res.writeHead(200,{'Content-Type':filename.endsWith('html')?'text/html; charset=utf-8':filename.endsWith('css')?'text/css; charset=utf-8':filename.endsWith('js')?'text/javascript; charset=utf-8':filename.endsWith('png')?'image/png':filename.endsWith('webp')?'image/webp':'image/svg+xml','Cache-Control':'no-cache'});res.end(req.method==='HEAD'?undefined:content);
     }catch(e) {
       if(res.headersSent) return res.end();
       const status=e instanceof HttpError?e.status:500;
