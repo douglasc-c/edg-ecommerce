@@ -1,18 +1,20 @@
-> **Cloudflare sem credenciais bancárias:** veja [CLOUDFLARE.md](CLOUDFLARE.md) para publicar o catálogo e preparar produtos/estoque reais com checkout bloqueado.
+> **Cloudflare sin credenciales bancarias:** consulta [CLOUDFLARE.md](CLOUDFLARE.md) para publicar el catálogo y preparar productos y existencias reales con el proceso de compra bloqueado.
 
 # EDG Commerce
 
-Loja virtual e painel de operação integrados: catálogo, carrinho persistente, checkout, pedidos, estoque, financeiro, expedição e usuários com permissões por função. Interface em português, responsiva, com área do cliente e área de gestão.
+Tienda online y panel de operaciones integrados: catálogo, carrito persistente, proceso de compra, pedidos, inventario, finanzas, expedición y usuarios con permisos por función. Interfaz en español de España, adaptable a móviles, con área de cliente y área de gestión.
 
-## Executar localmente
+La traducción de la interfaz no cambia las integraciones: el módulo fiscal actual emite **NF-e brasileñas mediante Focus NFe**. La facturación española y el pago europeo siguen pendientes de integración.
 
-Requer **Node.js 24**. O servidor usa HTTP, criptografia e SQLite nativos do Node. A biblioteca Sharp valida e otimiza as fotos. Instale as dependências com `npm ci` antes de executar.
+## Ejecutar en local
+
+Requiere **Node.js 24**. El servidor utiliza HTTP, criptografía y SQLite nativos de Node. La biblioteca Sharp valida y optimiza las fotos. Instala las dependencias con `npm ci` antes de ejecutar.
 
 ```bash
 cp .env.example .env
 ```
 
-Preencha `ADMIN_EMAIL` e `ADMIN_PASSWORD` com uma senha exclusiva de pelo menos 12 caracteres. Depois:
+Rellena `ADMIN_EMAIL` y `ADMIN_PASSWORD` con una contraseña exclusiva de al menos 12 caracteres. Después:
 
 ```bash
 npm ci
@@ -20,100 +22,100 @@ npm run seed
 npm start
 ```
 
-Abra http://localhost:3000. Entre com o administrador configurado para acessar a gestão. Clientes criam suas próprias contas pela loja. `npm run seed` é repetível e não substitui senhas existentes.
+Abre http://localhost:3000. Inicia sesión con el administrador configurado para acceder a la gestión. Los clientes crean sus propias cuentas desde la tienda. `npm run seed` se puede repetir y no sustituye las contraseñas existentes.
 
-No modo `demo`, o seed cria seis produtos de exemplo. Pagamentos e fretes são **simulados**, com aviso permanente na interface. O cliente pode simular aprovação no detalhe do pedido; nenhuma transação real é executada. Os produtos de exemplo usam símbolos ilustrativos até que você envie as fotos pelo painel.
+En modo `demo`, el seed crea seis productos de ejemplo. Los pagos y los envíos son **simulados**, con un aviso permanente en la interfaz. El cliente puede simular la aprobación desde el detalle del pedido; no se realiza ninguna transacción real. Los productos de ejemplo utilizan símbolos ilustrativos hasta que subas las fotos desde el panel.
 
-## Executar localmente com Docker
+## Ejecutar en local con Docker
 
-Com o Docker Desktop aberto e o `.env` preenchido com `ADMIN_EMAIL` e `ADMIN_PASSWORD` (pelo menos 12 caracteres):
+Con Docker Desktop abierto y el archivo `.env` cumplimentado con `ADMIN_EMAIL` y `ADMIN_PASSWORD` (al menos 12 caracteres):
 
 ```bash
 docker compose up -d --build
 ```
 
-Abra http://localhost:3000. O Compose prepara o administrador e o catálogo automaticamente no modo demo. Os dados ficam no volume persistente `commerce-data`.
+Abre http://localhost:3000. Compose prepara automáticamente el administrador y el catálogo en modo demo. Los datos se guardan en el volumen persistente `commerce-data`.
 
 ```bash
-docker compose logs -f app  # acompanhar logs
-docker compose stop        # parar
-docker compose up -d       # iniciar novamente
+docker compose logs -f app  # seguir los registros
+docker compose stop        # detener
+docker compose up -d       # volver a iniciar
 ```
 
-## O que está implementado
+## Funciones implementadas
 
-| Área | Recursos |
+| Área | Funciones |
 |---|---|
-| Loja | Busca, categorias, detalhe de produto, preços, disponibilidade e sacola persistente por cliente |
-| Checkout | Endereço, cotação no servidor, escolha de frete, reserva de estoque, criação idempotente do pedido |
-| Cliente | Cadastro, login, troca de senha, histórico de pedidos, pagamento, cancelamento antes do pagamento e acompanhamento |
-| Catálogo | SKU único, categoria, descrição, preço, custo, dimensões, peso, situação, galeria de fotos e cadastro fiscal |
-| Cupons | Percentual ou valor fixo, mínimo de compra, teto de desconto, período, limite total e limite por cliente |
-| NF-e | Emissão Focus NFe, consulta de autorização, DANFE/XML com acesso autenticado, cancelamento e chave integrada à etiqueta |
-| Recuperação | Link por e-mail, uso único, expiração, revogação de sessões e fila com retentativas via Resend |
-| Estoque | Saldo físico, reservado e disponível, alertas de reposição e histórico de entradas/saídas com responsável |
-| Pedidos | Pagamento, separação, embalagem, envio, entrega, cancelamento, estorno e linha do tempo |
-| Financeiro | Receitas confirmadas, estornos integrais/parciais, despesas, saldo e exportação CSV |
-| Expedição | Cotação Melhor Envio, criação de etiqueta comercial com chave de NF-e, compra de frete, impressão e rastreio |
-| Gestão | Dashboard, perfis por função, bloqueio de usuários, revogação de sessões e auditoria |
+| Tienda | Búsqueda, categorías, detalle del producto, precios, disponibilidad y carrito persistente por cliente |
+| Proceso de compra | Dirección, presupuesto en el servidor, elección del envío, reserva de existencias y creación idempotente del pedido |
+| Cliente | Registro, inicio de sesión, cambio de contraseña, historial de pedidos, pago, cancelación antes del pago y seguimiento |
+| Catálogo | SKU único, categoría, descripción, precio, coste, dimensiones, peso, estado, galería de fotos y datos fiscales |
+| Cupones | Porcentaje o importe fijo, compra mínima, descuento máximo, periodo, límite total y límite por cliente |
+| NF-e brasileña | Emisión con Focus NFe, consulta de autorización, DANFE/XML con acceso autenticado, cancelación y clave integrada en la etiqueta |
+| Recuperación | Enlace por correo electrónico, un solo uso, caducidad, revocación de sesiones y cola con reintentos mediante Resend |
+| Inventario | Existencias físicas, reservadas y disponibles, avisos de reposición e historial de entradas y salidas con responsable |
+| Pedidos | Pago, preparación, embalaje, envío, entrega, cancelación, reembolso y cronología |
+| Finanzas | Ingresos confirmados, reembolsos totales y parciales, gastos, saldo y exportación CSV |
+| Expedición | Presupuestos de Melhor Envio, creación de etiquetas comerciales con clave de NF-e, compra del envío, impresión y seguimiento |
+| Gestión | Panel de control, perfiles por función, bloqueo de usuarios, revocación de sesiones y auditoría |
 
-## Permissões
+## Permisos
 
-| Perfil | Acessos |
+| Perfil | Accesos |
 |---|---|
-| Administrador | Todas as operações |
-| Estoque | Dashboard operacional, catálogo, ajustes de estoque e consulta de pedidos |
-| Financeiro | Dashboard financeiro, pedidos, despesas, estornos, cupons e emissão fiscal |
-| Expedição | Dashboard operacional, consulta de pedidos, separação, embalagem, envio, entrega e etiquetas |
-| Atendimento | Dashboard operacional e consulta de pedidos |
-| Cliente | Sua sacola e seus próprios pedidos |
+| Administrador | Todas las operaciones |
+| Inventario | Panel operativo, catálogo, ajustes de inventario y consulta de pedidos |
+| Finanzas | Panel financiero, pedidos, gastos, reembolsos, cupones y emisión fiscal |
+| Expedición | Panel operativo, consulta de pedidos, preparación, embalaje, envío, entrega y etiquetas |
+| Atención al cliente | Panel operativo y consulta de pedidos |
+| Cliente | Su carrito y sus propios pedidos |
 
-As permissões são conferidas pelo servidor. O cadastro público sempre cria um cliente, independentemente de campos adicionais enviados. O cliente não recebe os custos internos dos itens nem identificadores internos de pagamentos e etiquetas.
+El servidor comprueba los permisos. El registro público siempre crea un cliente, independientemente de los campos adicionales enviados. El cliente no recibe los costes internos de los artículos ni los identificadores internos de pagos y etiquetas.
 
-## Regras da operação
+## Reglas de funcionamiento
 
-- Valores monetários são inteiros em centavos. O servidor calcula preços e totais; valores enviados pelo navegador não definem a cobrança.
-- Cotações duram 10 minutos e são vinculadas ao cliente, CEP e conteúdo do carrinho, incluindo dimensões e preços.
-- O checkout reserva unidades em transação SQLite. A aprovação baixa estoque físico e libera a reserva **uma vez**.
-- A reserva dura 30 minutos por padrão. Expiração e cancelamento liberam as unidades. A manutenção executa a cada minuto e também antes de operações relevantes.
-- Pagamento tardio após expiração tenta baixar unidades ainda disponíveis. Se faltarem unidades, o pedido vai para **pagamento em análise** e deve ser estornado pelo financeiro. Um pedido cancelado com pagamento tardio sempre exige análise.
-- Somente pagamentos aprovados, sem estorno parcial, podem seguir para expedição. Transições manuais obedecem à ordem; envio exige código de rastreio.
-- Estorno confirmado repõe estoque automaticamente apenas antes da expedição. Depois do envio, a equipe deve conferir a devolução e lançar a entrada no estoque.
-- Webhooks duplicados não duplicam receitas, baixas de estoque ou estornos. Notificações atrasadas de envio não fazem um pedido entregue voltar para enviado.
-- Uma segunda cobrança para um pedido já pago fica registrada na auditoria (`payment.duplicate`) e precisa de análise no gateway; não há nova baixa de estoque.
+- Los importes monetarios son enteros en céntimos. El servidor calcula los precios y los totales; los valores enviados por el navegador no determinan el cobro.
+- Los presupuestos duran 10 minutos y están vinculados al cliente, al código postal y al contenido del carrito, incluidas las dimensiones y los precios.
+- El proceso de compra reserva unidades en una transacción SQLite. La aprobación descuenta las existencias físicas y libera la reserva **una sola vez**.
+- La reserva dura 30 minutos por defecto. La caducidad y la cancelación liberan las unidades. El mantenimiento se ejecuta cada minuto y también antes de las operaciones relevantes.
+- Un pago tardío tras la caducidad intenta descontar las unidades que sigan disponibles. Si faltan unidades, el pedido pasa a **pago en revisión** y el equipo de finanzas debe reembolsarlo. Un pedido cancelado con un pago tardío siempre requiere revisión.
+- Solo los pagos aprobados, sin reembolso parcial, pueden pasar a expedición. Las transiciones manuales siguen el orden establecido; el envío exige un código de seguimiento.
+- Un reembolso confirmado repone automáticamente las existencias solo antes de la expedición. Tras el envío, el equipo debe comprobar la devolución y registrar la entrada en el inventario.
+- Los webhooks duplicados no duplican ingresos, descuentos de existencias ni reembolsos. Las notificaciones de envío retrasadas no hacen que un pedido entregado vuelva al estado enviado.
+- Un segundo cobro de un pedido ya pagado queda registrado en la auditoría (`payment.duplicate`) y debe revisarse en la pasarela; no vuelve a descontar existencias.
 
-## Pagamentos reais: Mercado Pago
+## Pagos reales: Mercado Pago
 
-Defina `COMMERCE_MODE=live`, `APP_URL` com sua origem pública HTTPS e:
+Define `COMMERCE_MODE=live`, `APP_URL` con tu origen público HTTPS y:
 
 - `MERCADO_PAGO_ACCESS_TOKEN`;
 - `MERCADO_PAGO_WEBHOOK_SECRET`;
-- `MERCADO_PAGO_COLLECTOR_ID` (ID da conta recebedora).
+- `MERCADO_PAGO_COLLECTOR_ID` (ID de la cuenta receptora).
 
-O checkout cria uma preferência de **Checkout Pro** e redireciona para a página do Mercado Pago. Os meios disponíveis dependem da conta e do provedor. O sistema não captura nem armazena dados de cartão.
+El proceso de compra crea una preferencia de **Checkout Pro** y redirige a la página de Mercado Pago. Los medios disponibles dependen de la cuenta y del proveedor. El sistema no captura ni almacena datos de tarjetas.
 
-Cadastre `https://SEU-DOMINIO/api/webhooks/mercadopago` nas notificações de pagamento da aplicação. O endpoint valida a assinatura e consulta o pagamento na API oficial antes de conferir pedido, recebedor, moeda e valor. O retorno do navegador nunca confirma pagamento.
+Registra `https://TU-DOMINIO/api/webhooks/mercadopago` en las notificaciones de pago de la aplicación. El endpoint valida la firma y consulta el pago en la API oficial antes de comprobar el pedido, el receptor, la moneda y el importe. El retorno del navegador nunca confirma el pago.
 
-Valide aprovação, pendência, rejeição, expiração e estorno com as contas de teste antes de operar. Não foram executadas cobranças reais nem testes autenticados no provedor durante a implementação.
+Valida la aprobación, el estado pendiente, el rechazo, la caducidad y el reembolso con las cuentas de prueba antes de operar. No se han realizado cobros reales ni pruebas autenticadas con el proveedor durante la implementación.
 
-## Frete real: Melhor Envio
+## Envíos reales: Melhor Envio
 
-Configure `MELHOR_ENVIO_TOKEN`, `SUPPORT_EMAIL`, `ORIGIN_POSTAL_CODE` e `MELHOR_ENVIO_SANDBOX`. As cotações usam pesos e dimensões do catálogo, preço customizado e prazo customizado retornados pela API.
+Configura `MELHOR_ENVIO_TOKEN`, `SUPPORT_EMAIL`, `ORIGIN_POSTAL_CODE` y `MELHOR_ENVIO_SANDBOX`. Los presupuestos utilizan los pesos y las dimensiones del catálogo, así como el precio y el plazo personalizados que devuelve la API.
 
-Para etiquetas, configure `SHIPPING_FROM_JSON` com remetente completo, documento apropriado (CPF ou CNPJ) e inscrição estadual. Ao emitir a NF-e pelo sistema, a chave autorizada em produção é reutilizada na etiqueta. Também é possível informar uma chave externa quando o pedido não tem emissão integrada. Criação, compra e impressão são ações separadas; comprar frete utiliza o saldo da conta Melhor Envio e exige confirmação na interface. Não foi contratada nenhuma entrega real.
+Para las etiquetas, configura `SHIPPING_FROM_JSON` con los datos completos del remitente, el documento correspondiente (CPF o CNPJ) y la inscripción estatal brasileña. Al emitir la NF-e desde el sistema, la clave autorizada en producción se reutiliza en la etiqueta. También se puede introducir una clave externa cuando el pedido no tiene una emisión integrada. La creación, la compra y la impresión son acciones independientes; la compra del envío utiliza el saldo de la cuenta de Melhor Envio y requiere confirmación en la interfaz. No se ha contratado ninguna entrega real.
 
-Atualizações automáticas usam `/api/webhooks/melhorenvio`. Configure `MELHOR_ENVIO_WEBHOOK_SECRET` com o secret do aplicativo integrado e cadastre o endpoint nesse mesmo aplicativo. A assinatura `X-ME-Signature` é conferida sobre o corpo original. Tokens gerados diretamente no painel podem cotar e consultar, mas o webhook depende de aplicativo integrado; nesses casos use o botão **Consultar transportadora**.
+Las actualizaciones automáticas utilizan `/api/webhooks/melhorenvio`. Configura `MELHOR_ENVIO_WEBHOOK_SECRET` con el secreto de la aplicación integrada y registra el endpoint en esa misma aplicación. La firma `X-ME-Signature` se comprueba sobre el cuerpo original. Los tokens generados directamente desde el panel permiten obtener presupuestos y realizar consultas, pero el webhook depende de una aplicación integrada; en esos casos, utiliza el botón **Consultar transportista**.
 
-A consulta atualiza o código de rastreio e avança para enviado/entregue quando o provedor confirma postagem/entrega. Também registra tentativas sem sucesso e interrupções na linha do tempo. Um link de rastreio externo pode ser informado manualmente para envios fora da integração.
+La consulta actualiza el código de seguimiento y avanza a enviado o entregado cuando el proveedor confirma la admisión o la entrega. También registra los intentos fallidos y las interrupciones en la cronología. Se puede introducir manualmente un enlace de seguimiento externo para envíos fuera de la integración.
 
-## Testes
+## Pruebas
 
 ```bash
 npm run check
 npm test
 ```
 
-Os testes de API/regra de negócio usam o banco em memória e não chamam provedores reais. Também foi executado e aprovado o teste de navegador do fluxo de compra, expedição, entrega e reposição, com inspeção visual em desktop e celular. A integração contínua também executa o fluxo de navegador de demonstração em desktop e verifica navegação em tela móvel. Para repetir os testes de navegador localmente, instale as dependências de desenvolvimento e Chromium:
+Las pruebas de API y reglas de negocio utilizan una base de datos en memoria y no llaman a proveedores reales. También se ha ejecutado y superado la prueba de navegador del flujo de compra, expedición, entrega y reposición, con inspección visual en ordenador y móvil. La integración continua también ejecuta el flujo de demostración en un navegador de escritorio y comprueba la navegación en pantalla móvil. Para repetir las pruebas de navegador en local, instala las dependencias de desarrollo y Chromium:
 
 ```bash
 npm install
@@ -121,76 +123,75 @@ npx playwright install chromium
 npm run test:ui
 ```
 
-## Hospedagem e dados
+## Alojamiento y datos
 
-Há um `Dockerfile` com usuário sem privilégios, volume `/data` e healthcheck. O container é configurado para produção; preencha as credenciais e configure HTTPS no proxy reverso. Execute o seed uma vez no mesmo volume para preparar o administrador, depois remova `ADMIN_PASSWORD` do ambiente de execução.
+Hay un `Dockerfile` con un usuario sin privilegios, el volumen `/data` y una comprobación de estado. El contenedor está configurado para producción; rellena las credenciales y configura HTTPS en el proxy inverso. Ejecuta el seed una vez en el mismo volumen para preparar el administrador y después elimina `ADMIN_PASSWORD` del entorno de ejecución.
 
-Use **uma instância do servidor** com disco persistente e backups do SQLite. A aplicação não é adequada a funções Vercel com filesystem efêmero ou múltiplas réplicas compartilhando o banco. Para esse cenário, migre a persistência para PostgreSQL e adicione filas para tarefas externas. Para backup consistente, use a API de backup SQLite ou pare o processo e copie o banco junto aos arquivos WAL/SHM; não copie somente o `.db` enquanto o servidor escreve.
+Utiliza **una sola instancia del servidor** con disco persistente y copias de seguridad de SQLite. La aplicación no es adecuada para funciones de Vercel con un sistema de archivos efímero ni para múltiples réplicas que compartan la base de datos. Para ese escenario, migra la persistencia a PostgreSQL y añade colas para las tareas externas. Para obtener una copia de seguridad coherente, utiliza la API de copia de seguridad de SQLite o detén el proceso y copia la base de datos junto con los archivos WAL/SHM; no copies únicamente el archivo `.db` mientras el servidor esté escribiendo.
 
-## Limites desta primeira versão
+## Límites de esta primera versión
 
-Esta versão cobre compra, operação, fotos, cupons, recuperação de senha e integração de emissão de NF-e. Antes de abrir a loja, precisa de credenciais dos provedores, catálogo real, identidade da loja e hospedagem. APIs externas foram verificadas pela documentação e por testes com respostas controladas; **homologação autenticada ainda é necessária**.
+Esta versión cubre la compra, las operaciones, las fotos, los cupones, la recuperación de contraseña y la integración de emisión de NF-e brasileñas. Antes de abrir la tienda, necesita las credenciales de los proveedores, un catálogo real, la identidad de la tienda y el alojamiento. Las API externas se han verificado mediante su documentación y con pruebas de respuestas controladas; **todavía es necesaria la homologación autenticada**.
 
-Ainda não inclui: variações por tamanho/cor, cálculo tributário automático, conciliação automática de taxas, devolução com logística reversa, verificação de e-mail, notificações de venda por e-mail/WhatsApp, multiestoque e integração de compras com fornecedores. A emissão fiscal usa os dados tributários configurados e revisados; não determina automaticamente regime, CFOP, CSOSN, DIFAL, IBS/CBS ou alíquotas.
+Todavía no incluye variantes de talla o color, cálculo tributario automático, conciliación automática de comisiones, devoluciones con logística inversa, verificación de correo electrónico, avisos de venta por correo electrónico o WhatsApp, múltiples almacenes ni integración de compras con proveedores. La emisión fiscal utiliza los datos tributarios configurados y revisados; no determina automáticamente el régimen, CFOP, CSOSN, DIFAL, IBS/CBS ni los tipos impositivos.
 
-Na integração de etiquetas, a criação automática está restrita a cotações com **um volume**; serviços com agência obrigatória, XML fiscal ou múltiplos volumes exigem extensão do adaptador ou operação no painel Melhor Envio. Não repetir criação/compra em resposta incerta sem conferir o painel do provedor. Para recuperação automática desses casos e de webhooks perdidos, a próxima evolução deve incluir fila durável e reconciliação periódica.
+En la integración de etiquetas, la creación automática se limita a presupuestos de **un solo bulto**; los servicios que exigen una oficina, XML fiscal o varios bultos requieren ampliar el adaptador u operar desde el panel de Melhor Envio. No repitas una creación o compra ante una respuesta incierta sin comprobar el panel del proveedor. Para recuperar automáticamente estos casos y los webhooks perdidos, la siguiente evolución debe incluir una cola duradera y conciliación periódica.
 
-Listagens administrativas usam limites de 200 pedidos/usuários/movimentações e 500 lançamentos; o saldo do dashboard considera todo o histórico. Implementar paginação antes de grande volume. O gráfico usa magnitude absoluta e não constitui relatório contábil.
+Los listados administrativos tienen límites de 200 pedidos, usuarios o movimientos y 500 apuntes; el saldo del panel considera todo el historial. Implementa la paginación antes de alcanzar un gran volumen. El gráfico utiliza magnitudes absolutas y no constituye un informe contable.
 
-## Documentação de referência
+## Documentación de referencia
 
 - [Mercado Pago: Checkout Pro](https://www.mercadopago.com.br/developers/pt/reference/online-payments/checkout-pro-preferences/overview)
-- [Mercado Pago: notificações](https://www.mercadopago.com.br/developers/pt/docs/checkout-pro-preferences/payment-notifications)
-- [Melhor Envio: cotação](https://docs.melhorenvio.com.br/reference/calculo-de-fretes-por-produtos)
-- [Melhor Envio: criação de etiqueta](https://docs.melhorenvio.com.br/reference/inserir-fretes-no-carrinho)
+- [Mercado Pago: notificaciones](https://www.mercadopago.com.br/developers/pt/docs/checkout-pro-preferences/payment-notifications)
+- [Melhor Envio: presupuestos](https://docs.melhorenvio.com.br/reference/calculo-de-fretes-por-produtos)
+- [Melhor Envio: creación de etiquetas](https://docs.melhorenvio.com.br/reference/inserir-fretes-no-carrinho)
 - [Melhor Envio: webhooks](https://docs.melhorenvio.com.br/docs/webhooks)
 
+## Fotos de los productos
 
-## Fotos dos produtos
+En el panel **Productos**, abre el editor y sube archivos JPEG, PNG o WebP de hasta 5 MB por archivo y ocho fotos por producto. La primera foto es la portada. Guarda el producto después de subir las fotos; se pueden eliminar imágenes de la galería desde el editor.
 
-No painel **Produtos**, abra o editor e envie JPEG, PNG ou WebP, com até 5 MB por arquivo e oito fotos por produto. A primeira foto é a capa. Salve o produto após o upload; imagens podem ser removidas da galeria no editor.
+El servidor decodifica la imagen, limita el número de píxeles, corrige la orientación, reduce el tamaño hasta 1280 px y genera un JPEG sin metadatos. No se aceptan archivos SVG ni archivos no válidos. La foto optimizada se guarda en SQLite, en el mismo almacenamiento persistente de la aplicación; por tanto, las copias de seguridad también incluyen las imágenes. Los archivos subidos sin asociación pueden permanecer almacenados y requieren una futura limpieza administrativa.
 
-O servidor decodifica a imagem, limita a quantidade de pixels, corrige a orientação, reduz para até 1280 px e gera um JPEG sem metadados. SVG e arquivos inválidos não são aceitos. A foto otimizada é guardada no SQLite, no mesmo armazenamento persistente da aplicação; portanto, os backups também incluem as imagens. Uploads sem associação podem permanecer armazenados e precisam de limpeza administrativa futura.
+## Cupones
 
-## Cupons
+Los administradores y el equipo de finanzas pueden crear y activar o desactivar cupones. Los porcentajes utilizan centésimas de porcentaje internamente; los importes fijos, mínimos y máximos utilizan céntimos. El descuento solo se aplica a los productos y mantiene al menos un céntimo para evitar que se envíen pedidos gratuitos a la pasarela.
 
-Administradores e financeiro podem criar e ativar/desativar cupons. Percentuais usam centésimos de percentual internamente; valores fixos, mínimos e tetos usam centavos. O desconto só se aplica aos produtos e mantém pelo menos um centavo para evitar pedidos gratuitos enviados ao gateway.
+El proceso de compra recalcula las reglas en una transacción junto con la reserva de existencias. Los pedidos pendientes reservan un uso del cupón; la cancelación y la caducidad lo liberan. El pago confirma el uso y el reembolso no permite reutilizar la promoción. Una vez que haya pedidos vinculados, las condiciones no se pueden editar: desactiva el cupón y crea otro código. Los pagos tardíos mantienen el descuento contratado y pueden consumir un uso que ya se había liberado; el límite evita nuevos procesos de compra sin modificar retroactivamente un cobro.
 
-O checkout recalcula as regras em transação com a reserva de estoque. Pedidos pendentes reservam um uso do cupom; cancelamento/expiração liberam. Pagamento confirma o uso, e estorno não permite reutilizar a promoção. Depois de ter pedidos vinculados, as condições não podem ser editadas: desative e crie outro código. Pagamentos tardios mantêm o desconto contratado e podem consumir um uso que já tinha sido liberado; o limite evita novos checkouts, sem alterar retroativamente uma cobrança.
+El descuento se reparte en céntimos exactos entre los artículos del proceso de compra de Mercado Pago y de la NF-e, conservando el total del pedido. Las condiciones futuras de un cupón no modifican los pedidos ya creados.
 
-O desconto é rateado em centavos exatos entre os itens no checkout do Mercado Pago e na NF-e, preservando o total do pedido. As condições futuras de um cupom não alteram pedidos já criados.
+## Recuperación de contraseña por correo electrónico
 
-## Recuperação de senha por e-mail
+Configura `RESEND_API_KEY`, `EMAIL_FROM` (remitente verificado en Resend) y `EMAIL_ENCRYPTION_KEY` (32 bytes en hexadecimal, estable). No expongas estas claves en el navegador. El endpoint público no revela si una cuenta existe.
 
-Configure `RESEND_API_KEY`, `EMAIL_FROM` (remetente verificado no Resend) e `EMAIL_ENCRYPTION_KEY` (32 bytes em hexadecimal, estável). Não coloque essas chaves no navegador. O endpoint público não revela se uma conta existe.
+El enlace dura 30 minutos, solo se puede utilizar una vez y contiene un token aleatorio cuyo hash se guarda en la base de datos. Una nueva solicitud invalida el enlace anterior; el cambio de contraseña revoca las sesiones y los demás enlaces de la cuenta. El cambio manual de contraseña y los cambios de acceso realizados por el administrador también invalidan los enlaces pendientes.
 
-O link dura 30 minutos, pode ser utilizado uma vez e contém um token aleatório cujo hash fica no banco. Uma nova solicitação invalida o link anterior; a troca de senha revoga as sessões e os demais links da conta. Troca manual de senha e alteração de acesso pelo administrador também invalidam links pendentes.
+El mensaje entra en una cola persistente, con el contenido cifrado mediante AES-256-GCM y hasta cinco intentos. El servidor procesa la cola cada minuto. La clave de envío es idempotente y el contenido cifrado se borra tras confirmar el envío. Guarda la clave de cifrado de forma segura; perderla o cambiarla impide el envío de mensajes pendientes. La aceptación por Resend no garantiza la entrega en el buzón del destinatario; consulta el panel del proveedor para comprobar rechazos, supresiones y devoluciones.
 
-A mensagem entra em fila persistente, com conteúdo criptografado por AES-256-GCM e até cinco tentativas. O servidor processa a fila a cada minuto. A chave de envio é idempotente e o conteúdo criptografado é apagado após confirmação de envio. Guarde a chave de criptografia com segurança; perder ou alterar essa chave impede o envio de mensagens pendentes. Aceitação pelo Resend não garante entrega na caixa do destinatário; confira o painel do provedor para rejeições, supressões e devoluções.
+En modo demo no se envía el mensaje: el administrador ve el texto y el enlace en **Correos electrónicos**, para probar el flujo. Esta vista del contenido no existe en modo live. La clave de cifrado de la simulación se guarda en la base de datos para poder reiniciar el entorno. Al alternar entre demo y live, se invalidan los enlaces y los mensajes pendientes.
 
-No modo demo, a mensagem não é enviada: o administrador vê o texto e o link em **E-mails**, para testar o fluxo. Essa visualização de conteúdo não existe no modo live. A chave criptográfica da simulação é guardada no banco para permitir reiniciar o ambiente. Ao alternar entre demo e live, links e mensagens pendentes são invalidados.
+## Emisión de NF-e brasileñas
 
-## Emissão de NF-e
+Integración de **NF-e de mercancías de Brasil mediante Focus NFe**. Este módulo no emite facturas españolas ni implementa VERI*FACTU. Configura la empresa y los recursos necesarios en el proveedor, tu `FOCUS_NFE_TOKEN`, `NFE_EMITTER_JSON`, `NFE_DEFAULTS_JSON` y `NFE_ENVIRONMENT=homologation` para empezar.
 
-Integração de **NF-e de mercadorias via Focus NFe**. Configure a empresa e os recursos necessários no provedor, seu `FOCUS_NFE_TOKEN`, `NFE_EMITTER_JSON`, `NFE_DEFAULTS_JSON` e `NFE_ENVIRONMENT=homologation` para iniciar.
+El emisor sigue el formato de Focus NFe: CNPJ, nombre, inscripción estatal, régimen tributario y dirección. Los parámetros generales deben incluir la naturaleza de la operación, la modalidad de envío, el consumidor final y el indicador de inscripción estatal del destinatario, además de los demás campos exigidos para tu operación.
 
-O emitente segue o formato Focus NFe: CNPJ, nome, inscrição estadual, regime tributário e endereço. Os parâmetros gerais devem incluir natureza da operação, modalidade de frete, consumidor final e indicador de inscrição estadual do destinatário, além dos demais campos exigidos para sua operação.
+Registra NCM, CFOP, unidad, origen y situaciones tributarias de ICMS, PIS y COFINS en el producto. Se pueden introducir campos tributarios adicionales en el editor avanzado. **Las clasificaciones, las bases imponibles, los importes de los tributos y los tipos impositivos deben ser configurados y revisados por el responsable contable para cada operación.** El sistema conserva una instantánea fiscal de los productos en el pedido; los cambios posteriores del catálogo no modifican la venta anterior. Los pedidos antiguos sin datos fiscales se pueden completar durante la revisión de la emisión.
 
-Cadastre NCM, CFOP, unidade, origem e situações tributárias de ICMS, PIS e COFINS no produto. Campos tributários adicionais podem ser informados no editor avançado. **Classificações, bases de cálculo, valores de tributos e alíquotas precisam ser configurados e revisados pelo responsável contábil para cada operação.** O sistema preserva um snapshot fiscal dos produtos no pedido; alterações posteriores no catálogo não mudam a venda anterior. Pedidos antigos sem cadastro fiscal podem ser completados na revisão da emissão.
+En el detalle de un pedido pagado, antes del envío, pulsa **Emitir NF-e**, comprueba los artículos fiscales y confirma. Introduce también el código fiscal del medio de pago efectivamente recibido y sus datos complementarios (incluidos los de la entidad adquirente y la autorización cuando corresponda). La integración no presupone que todo pago de Mercado Pago sea PIX o tarjeta. El servidor obtiene del pedido los precios, las cantidades, el destinatario, el descuento, el envío y el importe del pago. No se pueden modificar estos valores enviando datos fiscales arbitrarios. Esta implementación cubre la venta de mercancías con totales ya contratados; las operaciones que añaden importes como IPI/ST al total del pedido requieren ampliar el cálculo comercial antes de la emisión.
 
-No detalhe de um pedido pago, antes do envio, clique em **Emitir NF-e**, confira os itens fiscais e confirme. Informe também o código fiscal do meio efetivamente recebido e seus dados complementares (inclusive credenciadora/autorização quando aplicáveis). A integração não presume que todo pagamento do Mercado Pago seja PIX ou cartão. O servidor deriva preços, quantidades, destinatário, desconto, frete e valor do pagamento do pedido. Não é possível alterar esses valores enviando dados fiscais arbitrários. Esta implementação cobre venda de mercadorias com totais já contratados; operações que adicionam valores como IPI/ST ao total do pedido precisam de extensão do cálculo comercial antes da emissão.
+Cada pedido tiene una referencia fiscal persistente. La emisión puede quedar en proceso: utiliza **Consultar estado** hasta la autorización. Un fallo de comunicación queda marcado como incierto e impide un nuevo envío hasta que se realice la consulta. Si la consulta confirma que no hay una NF-e en el proveedor, se puede volver a enviar con la misma referencia; los rechazos se pueden corregir y reenviar. La aplicación no cambia la referencia para eludir una respuesta incierta.
 
-Cada pedido tem uma referência fiscal persistente. Emissão pode ficar em processamento: use **Consultar situação** até a autorização. Uma falha de comunicação fica marcada como incerta e impede novo envio até a consulta. Se a consulta confirmar que não há nota no provedor, é possível reenviar usando a mesma referência; rejeições podem ser corrigidas e reenviadas. A aplicação não troca a referência para contornar uma resposta incerta.
+El DANFE y el XML están disponibles en el pedido mediante rutas autenticadas. Los clientes solo pueden acceder a los documentos de sus propios pedidos. Para contratar una etiqueta real, la emisión vinculada debe estar autorizada en producción; los documentos simulados, de homologación, cancelados o pendientes no sirven para esa etiqueta. Los envíos manuales con una NF-e vinculada también requieren autorización en el entorno correcto.
 
-DANFE e XML ficam disponíveis no pedido, por rotas autenticadas. Clientes só acessam documentos dos seus próprios pedidos. Para contratar a etiqueta real, a emissão vinculada precisa estar autorizada em produção; notas simuladas, de homologação, canceladas ou pendentes não servem para essa etiqueta. Envios manuais com nota vinculada também exigem autorização no ambiente correto.
+La cancelación de una NF-e exige una justificación y la confirmación del proveedor, y la aplicación la bloquea después de la expedición. El proveedor o la SEFAZ deciden los plazos y las condiciones de autorización y cancelación. La cancelación fiscal y el reembolso financiero son operaciones independientes. Las cartas de corrección, la inutilización, los documentos fiscales de devolución y la NF-e complementaria todavía no forman parte de este módulo.
 
-Cancelamento de NF-e exige justificativa e confirmação do provedor, e é bloqueado pela aplicação após expedição. O prazo e as condições de autorização/cancelamento são decididos pelo provedor/SEFAZ. Cancelamento fiscal e estorno financeiro são operações separadas. Cartas de correção, inutilização, notas de devolução e NF-e complementar ainda não fazem parte deste módulo.
+El modo demo simula la autorización y la cancelación sin enviar datos a la SEFAZ ni generar DANFE/XML reales. En modo live, la homologación se identifica en la interfaz y utiliza el endpoint específico; la producción exige `NFE_ENVIRONMENT=production`, un token adecuado y datos revisados. No se ha emitido ningún documento fiscal real durante la implementación. Sigue siendo necesaria la homologación autenticada de tu empresa.
 
-O modo demo simula autorização e cancelamento, sem enviar dados à SEFAZ e sem gerar DANFE/XML reais. No modo live, homologação é identificada na interface e usa o endpoint específico; produção exige `NFE_ENVIRONMENT=production`, token apropriado e dados revisados. Não foi emitida nota fiscal real durante a implementação. A homologação autenticada da sua empresa ainda é necessária.
+Las migraciones al esquema v2 son automáticas y conservan los registros y pedidos existentes; haz una copia de seguridad antes de actualizar una instalación. El operador consulta el procesamiento fiscal; esta versión no incluye webhook de Focus NFe ni consulta fiscal automática.
 
-As migrações para o esquema v2 são automáticas e preservam cadastros e pedidos existentes; faça backup antes de atualizar uma instalação. O processamento fiscal é consultado pelo operador; não há webhook Focus NFe nem consulta fiscal automática nesta versão.
-
-- [Focus NFe: emissão](https://doc.focusnfe.com.br/reference/emitir_nfe)
+- [Focus NFe: emisión](https://doc.focusnfe.com.br/reference/emitir_nfe)
 - [Focus NFe: consulta](https://doc.focusnfe.com.br/reference/consultar_nfe)
-- [Focus NFe: cancelamento](https://doc.focusnfe.com.br/reference/cancelar_nfe)
-- [Resend: envio](https://resend.com/docs/api-reference/emails/send-email)
+- [Focus NFe: cancelación](https://doc.focusnfe.com.br/reference/cancelar_nfe)
+- [Resend: envío](https://resend.com/docs/api-reference/emails/send-email)

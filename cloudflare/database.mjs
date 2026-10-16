@@ -1,5 +1,5 @@
 import { initialize } from '../src/schema.mjs';
-export function database(){throw new Error('Use o banco persistente do Durable Object.');}
+export function database(){throw new Error('Usa la base de datos persistente del Durable Object.');}
 export function transaction(db,fn){return db.transactionSync(fn);}
 export function durableDatabase(storage){
   const db={

@@ -1,4 +1,4 @@
-name: Commerce checks
+name: Comprobaciones de Commerce
 on:
   push:
     branches: [master, main, 'feat/**']

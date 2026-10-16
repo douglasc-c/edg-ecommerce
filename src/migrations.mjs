@@ -1,4 +1,4 @@
-// Migrações incrementais: executadas em transação e preservam dados da versão anterior.
+// Migraciones incrementales: se ejecutan en una transacción y conservan los datos de la versión anterior.
 function migrateV2(db) {
   const current=db.prepare('SELECT MAX(version) v FROM schema_version').get().v;
   if(current>=2)return;
