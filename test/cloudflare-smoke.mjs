@@ -31,6 +31,9 @@ try{
   const upload=await mf.dispatchFetch(origin+'/api/admin/media',{method:'POST',headers:{Origin:origin,...auth,'Content-Type':'image/jpeg'},body:photo});const image=await upload.json();assert.equal(upload.status,201,JSON.stringify(image));
   const input={sku:'SMOKE-1',name:'Producto Europa',category:'Prueba',description:'Producto real',price:1999,cost:1000,low_stock:2,weight:.5,width:10,height:10,length:10,color:'#d9e4d5',icon:'◇',images:[image.id]};
   result=await call('/api/admin/products','POST',input);assert.equal(result.r.status,201,JSON.stringify(result.data));const id=result.data.id;
+  result=await call('/api/admin/categories','POST',{name:'Prueba',previous:'Prueba',image_id:image.id});assert.equal(result.r.status,201,JSON.stringify(result.data));
+  const categories=await mf.dispatchFetch(origin+'/api/categories');assert.equal(categories.status,200);
+  assert.deepEqual((await categories.json()).find(category=>category.name==='Prueba'),{name:'Prueba',image:image.url});
   result=await call(`/api/admin/products/${id}/stock`,'POST',{delta:12,reason:'Existencias iniciales'});assert.equal(result.r.status,200,JSON.stringify(result.data));
   assert.equal((await call('/api/products')).data[0].available,12);
   for(const path of ['/api/checkout','/api/shipping/quote',`/api/orders/fake/demo-pay`,`/api/cart/${id}`,'/api/webhooks/mercadopago'])assert.equal((await call(path,path.includes('/cart/')?'PUT':'POST',{})).r.status,503,path);
@@ -38,6 +41,20 @@ try{
   const downloaded=await mf.dispatchFetch(origin+image.url);assert.equal(downloaded.status,200);assert.equal(downloaded.headers.get('content-type'),'image/jpeg');assert.ok((await downloaded.arrayBuffer()).byteLength>0);
   await mf.dispose();mf=create({...options,bindings:Object.fromEntries(Object.entries(options.bindings).filter(([key])=>key!=='ADMIN_PASSWORD'))});
   assert.equal((await call('/api/products')).data[0].available,12,'Existencias conservadas tras reiniciar');
+  const persistedCategories=await mf.dispatchFetch(origin+'/api/categories');assert.equal(persistedCategories.status,200);
+  assert.deepEqual((await persistedCategories.json()).find(category=>category.name==='Prueba'),{name:'Prueba',image:image.url},'Imagen de categoría conservada tras reiniciar');
   assert.equal((await call('/api/admin/products')).r.status,200,'Sesión conservada tras reiniciar');
-  console.log('Workers: administración, autorización, fotos, productos, inventario, bloqueo de ventas y persistencia verificados.');
+  result=await call('/api/admin/categories','DELETE',{name:'Prueba'});assert.equal(result.r.status,409,JSON.stringify(result.data));
+  result=await call(`/api/admin/products/${id}`,'DELETE');assert.equal(result.r.status,200,JSON.stringify(result.data));
+  for(const path of ['/api/products','/api/admin/products']){
+    result=await call(path);assert.equal(result.r.status,200,JSON.stringify(result.data));assert.equal(result.data.some(product=>product.id===id),false,path);
+  }
+  result=await call('/api/admin/categories','DELETE',{name:'Prueba'});assert.equal(result.r.status,200,JSON.stringify(result.data));
+  result=await call('/api/categories');assert.equal(result.r.status,200,JSON.stringify(result.data));assert.equal(result.data.some(category=>category.name==='Prueba'),false);
+  await mf.dispose();mf=create({...options,bindings:Object.fromEntries(Object.entries(options.bindings).filter(([key])=>key!=='ADMIN_PASSWORD'))});
+  for(const path of ['/api/products','/api/admin/products']){
+    result=await call(path);assert.equal(result.r.status,200,JSON.stringify(result.data));assert.equal(result.data.some(product=>product.id===id),false,`Producto eliminado no reaparece tras reiniciar: ${path}`);
+  }
+  result=await call('/api/categories');assert.equal(result.r.status,200,JSON.stringify(result.data));assert.equal(result.data.some(category=>category.name==='Prueba'),false,'Categoría eliminada no reaparece tras reiniciar');
+  console.log('Workers: administración, autorización, fotos, categorías, productos, inventario, eliminación, bloqueo de ventas y persistencia verificados.');
 }finally{if(mf)await mf.dispose();await rm(directory,{recursive:true,force:true});}

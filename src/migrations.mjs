@@ -37,8 +37,7 @@ function migrateV2(db) {
   try {apply();db.exec('COMMIT');}catch(error){db.exec('ROLLBACK');throw error;}
 }
 
-export function migrate(db) {
-  migrateV2(db);
+function migrateV3(db) {
   const apply=()=>{
     if(db.prepare('SELECT MAX(version) v FROM schema_version').get().v>=3)return;
     db.exec("ALTER TABLE products ADD COLUMN size TEXT NOT NULL DEFAULT ''; INSERT INTO schema_version VALUES(3);");
@@ -46,4 +45,36 @@ export function migrate(db) {
   if(db.transactionSync)return db.transactionSync(apply);
   db.exec('BEGIN IMMEDIATE');
   try{apply();db.exec('COMMIT');}catch(error){db.exec('ROLLBACK');throw error;}
+}
+
+function migrateV4(db) {
+  const apply=()=>{
+    if(db.prepare('SELECT MAX(version) v FROM schema_version').get().v>=4)return;
+    // Las primeras bases se crearon antes de que existiera la tabla de categorías.
+    db.exec('CREATE TABLE IF NOT EXISTS categories(name TEXT PRIMARY KEY COLLATE NOCASE);');
+    if(!db.prepare('PRAGMA table_info(categories)').all().some(column=>column.name==='image_id')) {
+      db.exec('ALTER TABLE categories ADD COLUMN image_id TEXT REFERENCES media(id);');
+    }
+    db.exec('INSERT INTO schema_version VALUES(4);');
+  };
+  if(db.transactionSync)return db.transactionSync(apply);
+  db.exec('BEGIN IMMEDIATE');
+  try{apply();db.exec('COMMIT');}catch(error){db.exec('ROLLBACK');throw error;}
+}
+
+function migrateV5(db) {
+  const apply=()=>{
+    if(db.prepare('SELECT MAX(version) v FROM schema_version').get().v>=5)return;
+    db.exec('ALTER TABLE products ADD COLUMN deleted_at TEXT; INSERT INTO schema_version VALUES(5);');
+  };
+  if(db.transactionSync)return db.transactionSync(apply);
+  db.exec('BEGIN IMMEDIATE');
+  try{apply();db.exec('COMMIT');}catch(error){db.exec('ROLLBACK');throw error;}
+}
+
+export function migrate(db) {
+  migrateV2(db);
+  migrateV3(db);
+  migrateV4(db);
+  migrateV5(db);
 }

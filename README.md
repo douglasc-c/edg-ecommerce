@@ -153,6 +153,10 @@ En el panel **Productos**, abre el editor y sube archivos JPEG, PNG o WebP de ha
 
 El servidor decodifica la imagen, limita el número de píxeles, corrige la orientación, reduce el tamaño hasta 1280 px y genera un JPEG sin metadatos. No se aceptan archivos SVG ni archivos no válidos. La foto optimizada se guarda en SQLite, en el mismo almacenamiento persistente de la aplicación; por tanto, las copias de seguridad también incluyen las imágenes. Los archivos subidos sin asociación pueden permanecer almacenados y requieren una futura limpieza administrativa.
 
+En **Productos → Categorías**, puedes elegir, cambiar o quitar la imagen de fondo de cada tarjeta de **Descubre más**. Se admiten JPEG, PNG y WebP de hasta 5 MB. Selecciona la imagen, revisa la vista previa y pulsa **Guardar cambios** en esa categoría. La imagen se conserva al renombrar la categoría; las categorías sin imagen mantienen el diseño neutro y solo aparecen en la tienda si tienen productos activos.
+
+En **Productos**, el botón **Eliminar** retira el producto del catálogo y de los carritos tras confirmar la operación. Los pedidos existentes, las reservas y el historial de movimientos se conservan; el SKU sigue reservado para ese registro. En **Productos → Categorías**, **Eliminar categoría** permite borrar una categoría vacía. Si todavía tiene productos asociados, incluso inactivos, primero debes cambiarlos de categoría o eliminarlos. Borrar una categoría no elimina sus productos automáticamente.
+
 ## Cupones
 
 Los administradores y el equipo de finanzas pueden crear y activar o desactivar cupones. Los porcentajes utilizan centésimas de porcentaje internamente; los importes fijos, mínimos y máximos utilizan céntimos. El descuento solo se aplica a los productos y mantiene al menos un céntimo para evitar que se envíen pedidos gratuitos a la pasarela.
