@@ -9,10 +9,9 @@ function heroElements(page){
     hero,
     intro:hero.locator('#campaign-intro'),
     loop:hero.locator('#campaign-video'),
+    poster:hero.locator('img[src="/edg-logo-tremor-poster.png"]'),
     description:hero.getByText('Skateboarding y cultura urbana.',{exact:true}),
     collection:hero.getByRole('link',{name:/Explorar la colección/,includeHidden:true}),
-    play:hero.getByRole('button',{name:'Reproducir animación',exact:true}),
-    pause:hero.getByRole('button',{name:'Pausar animación',exact:true}),
   };
 }
 
@@ -29,6 +28,24 @@ async function expectPlaying(video){
   await expect.poll(()=>video.evaluate(media=>!media.paused&&media.currentTime>0)).toBe(true);
 }
 
+async function expectNoPlaybackControls(hero){
+  await expect(hero.getByRole('button',{includeHidden:true})).toHaveCount(0);
+  await expect(hero.locator('video[controls]')).toHaveCount(0);
+}
+
+async function expectStaticHero({hero,intro,loop,poster,description,collection}){
+  await expect(description).toBeVisible();
+  await expect(collection).toBeVisible();
+  await expect(poster).toBeVisible();
+  await expect(poster).toHaveCSS('opacity','1');
+  await expect.poll(()=>poster.evaluate(image=>image.complete&&image.naturalWidth>0)).toBe(true);
+  for(const video of [intro,loop]){
+    await expect(video).toHaveJSProperty('paused',true);
+    await expect(video).toHaveCSS('opacity','0');
+  }
+  await expectNoPlaybackControls(hero);
+}
+
 async function observeMediaEvents(page){
   await page.addInitScript(()=>{
     window.heroMediaEvents=[];
@@ -40,7 +57,7 @@ async function observeMediaEvents(page){
   });
 }
 
-test('la intro termina antes de mostrar la colección y activar el loop; la pausa persiste al volver',async({page})=>{
+test('la intro termina antes de mostrar la colección y activar el loop sin controles ni repetirse al volver',async({page})=>{
   const errors=[];page.on('pageerror',error=>errors.push(error.message));
   const requests=mediaRequests(page);
   await observeMediaEvents(page);
@@ -49,8 +66,9 @@ test('la intro termina antes de mostrar la colección y activar el loop; la paus
   await page.route(`**${INTRO}`,async route=>{await introGate;await route.continue();});
   try{
     await page.goto('/',{waitUntil:'domcontentloaded'});
-    const {hero,intro,loop,description,collection,play,pause}=heroElements(page);
+    const {hero,intro,loop,description,collection}=heroElements(page);
     await expect(hero).toBeVisible();
+    await expectNoPlaybackControls(hero);
     await expect.poll(()=>requests.includes(INTRO)).toBe(true);
     await expect(description).toBeHidden();
     await expect(collection).toHaveCount(1);
@@ -65,6 +83,8 @@ test('la intro termina antes de mostrar la colección y activar el loop; la paus
     await expect(intro).toHaveJSProperty('ended',true,{timeout:10000});
     await expect(description).toBeVisible();
     await expect(collection).toBeVisible();
+    await expect(hero.getByText('ORIGINAL . BARCELONA',{exact:true})).toBeVisible();
+    await expect(hero.getByText('EDG / Skateboards',{exact:true})).toHaveCount(0);
     await expectPlaying(loop);
 
     const events=await page.evaluate(()=>window.heroMediaEvents);
@@ -75,9 +95,6 @@ test('la intro termina antes de mostrar la colección y activar el loop; la paus
     expect(introEnded).toBeGreaterThan(introPlaying);
     expect(loopPlaying).toBeGreaterThan(introEnded);
 
-    await pause.click();
-    await expect(loop).toHaveJSProperty('paused',true);
-    await expect(play).toBeVisible();
     const introRequestCount=requests.filter(path=>path===INTRO).length;
     const introPlayCount=events.filter(event=>event.type==='playing'&&event.source===INTRO).length;
     await page.getByRole('banner').getByRole('link',{name:/Carrito/}).click();
@@ -85,9 +102,7 @@ test('la intro termina antes de mostrar la colección y activar el loop; la paus
     await page.getByRole('link',{name:'Inicio',exact:true}).click();
     await expect(collection).toBeVisible();
     await expect(description).toBeVisible();
-    await expect(loop).toHaveJSProperty('paused',true);
-    await expect(play).toBeVisible();
-    await play.click();
+    await expectNoPlaybackControls(hero);
     await expectPlaying(loop);
     expect(requests.filter(path=>path===INTRO)).toHaveLength(introRequestCount);
     expect(await page.evaluate(()=>window.heroMediaEvents.filter(event=>event.type==='playing'&&event.source==='/edg-intro.mp4').length)).toBe(introPlayCount);
@@ -97,67 +112,40 @@ test('la intro termina antes de mostrar la colección y activar el loop; la paus
   }
 });
 
-test('movimiento reducido muestra el contenido sin descargar MP4 y solo reproduce el loop por petición',async({page})=>{
+test('movimiento reducido muestra contenido y poster estático sin controles ni descargas MP4',async({page})=>{
   await page.emulateMedia({reducedMotion:'reduce'});
   const requests=mediaRequests(page);
   await page.goto('/');
-  const {intro,loop,description,collection,play,pause}=heroElements(page);
-  await expect(description).toBeVisible();
-  await expect(collection).toBeVisible();
-  await expect(play).toBeVisible();
-  await expect(intro).toHaveJSProperty('paused',true);
-  await expect(loop).toHaveJSProperty('paused',true);
+  await expectStaticHero(heroElements(page));
   await page.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))));
   expect(requests).toEqual([]);
-
-  await play.click();
-  await expectPlaying(loop);
-  await expect(pause).toBeVisible();
-  await expect(intro).toHaveJSProperty('paused',true);
-  expect(requests).toContain(LOOP);
-  expect(requests).not.toContain(INTRO);
 });
 
 test('una intro no encontrada mantiene la colección accesible y reproduce el loop',async({page})=>{
   await page.route(`**${INTRO}`,route=>route.fulfill({status:404,contentType:'text/plain',body:'Intro not found'}));
   await page.goto('/');
-  const {loop,description,collection,pause}=heroElements(page);
+  const {hero,loop,description,collection}=heroElements(page);
   await expect(description).toBeVisible();
   await expect(collection).toBeVisible();
   await expectPlaying(loop);
-  await expect(pause).toBeVisible();
+  await expectNoPlaybackControls(hero);
   await collection.click();
   await expect(page).toHaveURL(/#catalog$/);
   await expect(page.getByRole('heading',{name:'LA COLECCIÓN.',exact:true})).toBeInViewport();
 });
 
-test('el bloqueo del autoplay revela el contenido y permite iniciar el loop manualmente',async({page})=>{
+test('el bloqueo del autoplay conserva contenido accesible y poster estático sin controles',async({page})=>{
   await page.addInitScript(()=>{
-    const nativePlay=HTMLMediaElement.prototype.play;
-    let manualPlaybackAllowed=false;
-    document.addEventListener('click',event=>{if(event.isTrusted)manualPlaybackAllowed=true;},true);
     window.autoplayRejections=0;
     HTMLMediaElement.prototype.play=function(){
-      if(!manualPlaybackAllowed){
-        window.autoplayRejections++;
-        return Promise.reject(new DOMException('Autoplay blocked for this test','NotAllowedError'));
-      }
-      return nativePlay.call(this);
+      window.autoplayRejections++;
+      return Promise.reject(new DOMException('Autoplay blocked for this test','NotAllowedError'));
     };
   });
   await observeMediaEvents(page);
   await page.goto('/');
-  const {intro,loop,description,collection,play,pause}=heroElements(page);
   await expect.poll(()=>page.evaluate(()=>window.autoplayRejections)).toBeGreaterThan(0);
-  await expect(description).toBeVisible();
-  await expect(collection).toBeVisible();
-  await expect(play).toBeVisible();
-  await expect(intro).toHaveJSProperty('paused',true);
-  await expect(loop).toHaveJSProperty('paused',true);
-  await play.click();
-  await expectPlaying(loop);
-  await expect(pause).toBeVisible();
+  await expectStaticHero(heroElements(page));
   const playing=await page.evaluate(()=>window.heroMediaEvents.filter(event=>event.type==='playing'));
-  expect(playing.some(event=>event.source===LOOP)).toBe(true);
-  expect(playing.some(event=>event.source===INTRO)).toBe(false);
+  expect(playing).toEqual([]);
 });

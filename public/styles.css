@@ -16,7 +16,7 @@ button.product-visual{width:100%;border:0;color:var(--ink)}pre{white-space:pre-w
 @media(max-width:480px){.category-image-picker{grid-template-columns:1fr}.category-image-preview{max-width:180px;width:100%}}
 /* Infinite deck showcase between the campaign and collection. */
 /* Immersive campaign: the video and poster share their original framing. */
-.campaign{display:grid;grid-template-rows:auto 1fr auto;justify-items:center;min-height:560px;padding:36px 5vw 20px;background:#000;color:#fff;border-bottom:1px solid #252525;overflow:hidden}
+.campaign{display:grid;grid-template-rows:auto 1fr;justify-items:center;min-height:560px;padding:36px 5vw 20px;background:#000;color:#fff;border-bottom:1px solid #252525;overflow:hidden}
 .campaign>.eyebrow{text-align:center}
 .campaign-body{display:flex;flex-direction:column;align-items:center;justify-content:center;min-width:0;width:100%;padding-bottom:36px}
 .campaign-media{position:relative;width:min(100%,760px);height:clamp(230px,26vw,320px);overflow:hidden;background:#000;isolation:isolate}
@@ -27,11 +27,7 @@ button.product-visual{width:100%;border:0;color:var(--ink)}pre{white-space:pre-w
 .campaign-description{text-align:center;text-transform:uppercase;font-size:12px;line-height:1.6;letter-spacing:1.8px;color:#b8b8b8;margin:0 0 24px}
 .campaign .campaign-cta{border:1px solid #fff;border-radius:0;background:#fff;color:#000;text-transform:uppercase;letter-spacing:1px;font-size:11px;font-weight:700;min-height:48px;max-width:100%;padding:16px 24px;white-space:normal;text-align:center}
 .campaign .campaign-cta:hover{background:#e5e5e5;border-color:#e5e5e5}
-.campaign-footer{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px 18px;width:100%;max-width:1280px;min-height:56px;padding-top:14px;border-top:1px solid #252525}
-.campaign-caption{color:#b8b8b8;font-size:11px;line-height:1.5;letter-spacing:1.5px}
-.campaign-motion-toggle{display:inline-flex;align-items:center;gap:9px;min-height:44px;padding:10px 0;border:0;border-radius:0;background:transparent;color:#fff;font-size:12px;line-height:1.5}
-.campaign-motion-toggle[hidden]{display:none}.campaign-motion-toggle:hover{text-decoration:underline;text-underline-offset:4px}.campaign-motion-icon{font-size:18px}
-@media(max-width:760px){.campaign{min-height:450px;padding:28px 20px 16px}.campaign-media{height:220px}.campaign-body{padding-bottom:24px}.campaign-description{font-size:11px;letter-spacing:.8px}.campaign-caption{letter-spacing:.9px}}
+@media(max-width:760px){.campaign{min-height:450px;padding:28px 20px 16px}.campaign-media{height:220px}.campaign-body{padding-bottom:24px}.campaign-description{font-size:11px;letter-spacing:.8px}}
 .deck-carousel{background:#000;color:#fff;padding:64px 0;overflow:hidden}
 .deck-carousel-window{overflow:hidden}
 .deck-carousel-track{display:flex;width:max-content;animation:deck-scroll 120s linear infinite}
