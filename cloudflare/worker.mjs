@@ -3,6 +3,7 @@ import { randomUUID } from 'node:crypto';
 import { createApp, configuration } from '../src/server.mjs';
 import { email, passwordHash, now } from '../src/security.mjs';
 import { durableDatabase } from './database.mjs';
+import { campaignVideoPaths, campaignVideoResponse } from '../src/video-response.mjs';
 
 // Un objeto estable es propietario de la base de datos de esta tienda. Nunca se deriva su nombre de la entrada del usuario.
 export class CommerceStore extends DurableObject {
@@ -41,13 +42,27 @@ export default {
   async fetch(request,env){
     const path=new URL(request.url).pathname;
     if(path.startsWith('/api/') || path.startsWith('/media/'))return env.STORE.getByName('primary').fetch(request);
-    const response=await env.ASSETS.fetch(request);
+    const campaignVideo=campaignVideoPaths.has(path)&&['GET','HEAD'].includes(request.method);
+    let assetRequest=request;
+    if(campaignVideo){
+      // The assets binding may ignore Range; obtain the complete small MP4 and
+      // apply the requested range ourselves, including Safari's initial probe.
+      const headers=new Headers(request.headers);
+      headers.delete('Range');headers.delete('If-Range');
+      headers.set('Accept-Encoding','identity');
+      assetRequest=new Request(request,{method:'GET',headers});
+    }
+    let response=await env.ASSETS.fetch(assetRequest);
+    if(campaignVideo&&response.status===200){
+      const result=campaignVideoResponse(request,new Uint8Array(await response.arrayBuffer()),response.headers);
+      response=new Response(result.body,{status:result.status,headers:result.headers});
+    }
     const headers=new Headers(response.headers);
     headers.set('Content-Language','es');
     headers.set('X-Content-Type-Options','nosniff');headers.set('X-Frame-Options','DENY');
     headers.set('Content-Security-Policy',"default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'");
     headers.set('Strict-Transport-Security','max-age=31536000');
-    return new Response(response.body,{status:response.status,headers});
+    return new Response(request.method==='HEAD'?null:response.body,{status:response.status,headers});
   },
   async scheduled(controller,env,ctx){ctx.waitUntil(env.STORE.getByName('primary').maintenance());}
 };

@@ -14,9 +14,36 @@ try{
   const options={name:"edg-test",modulesRoot:directory,modules:true,scriptPath:join(directory,'worker.js'),compatibilityDate:'2026-01-01',compatibilityFlags:['nodejs_compat'],cf:false,host:'127.0.0.1',port:0,
     durableObjects:{STORE:{className:'CommerceStore',useSQLite:true}},durableObjectsPersist:join(directory,'storage'),
     bindings:{APP_URL:origin,COMMERCE_MODE:'catalog',STORE_CURRENCY:'EUR',ADMIN_EMAIL:'admin@example.test',ADMIN_PASSWORD:password},
-    serviceBindings:{ASSETS:async request=>new Response(await readFile(resolve('public',new URL(request.url).pathname==='/'?'index.html':new URL(request.url).pathname.slice(1))))}};
+    // This binding intentionally ignores Range, matching the production failure.
+    serviceBindings:{ASSETS:async request=>new Response(await readFile(resolve('public',new URL(request.url).pathname==='/'?'index.html':new URL(request.url).pathname.slice(1))),{headers:{ETag:'W/"asset"','Cache-Control':'public, max-age=60'}})}};
   const create=opts=>new Miniflare({...convertV4MiniflareOptions(opts),resourcePersistencePath:join(directory,"storage")});
   mf=create(options);
+  for(const path of ['/edg-intro.mp4','/edg-logo-tremor-loop.mp4']){
+    const file=await readFile(resolve('public',path.slice(1)));
+    let etag;
+    for(const [range,start,end] of [['bytes=0-1',0,1],['bytes=1000-1999',1000,1999],[`bytes=${file.length-8}-`,file.length-8,file.length-1],['bytes=-8',file.length-8,file.length-1]]){
+      const response=await mf.dispatchFetch(origin+path,{headers:{Range:range}});
+      assert.equal(response.status,206,`${path}: ${range}`);
+      assert.equal(response.headers.get('content-type'),'video/mp4');
+      assert.equal(response.headers.get('accept-ranges'),'bytes');
+      assert.equal(response.headers.get('content-length'),String(end-start+1));
+      assert.equal(response.headers.get('content-range'),`bytes ${start}-${end}/${file.length}`);
+      assert.equal(response.headers.get('x-content-type-options'),'nosniff');
+      assert.equal(response.headers.get('cache-control'),'public, max-age=60');
+      assert.deepEqual(Buffer.from(await response.arrayBuffer()),file.subarray(start,end+1));
+      etag=response.headers.get('etag');assert.match(etag,/^"[a-f0-9]{64}"$/);
+    }
+    const head=await mf.dispatchFetch(origin+path,{method:'HEAD',headers:{Range:'bytes=0-1'}});
+    assert.equal(head.status,200);assert.equal(head.headers.get('content-length'),String(file.length));
+    assert.equal((await head.arrayBuffer()).byteLength,0);
+    const invalid=await mf.dispatchFetch(origin+path,{headers:{Range:`bytes=${file.length}-`}});
+    assert.equal(invalid.status,416);assert.equal(invalid.headers.get('content-range'),`bytes */${file.length}`);
+    await invalid.arrayBuffer();
+    const valid=await mf.dispatchFetch(origin+path,{headers:{Range:'bytes=0-1','If-Range':etag}});
+    assert.equal(valid.status,206);assert.deepEqual(Buffer.from(await valid.arrayBuffer()),file.subarray(0,2));
+    const stale=await mf.dispatchFetch(origin+path,{headers:{Range:'bytes=0-1','If-Range':'"outdated"'}});
+    assert.equal(stale.status,200);assert.deepEqual(Buffer.from(await stale.arrayBuffer()),file);
+  }
   let auth={};
   async function call(path,method='GET',body,headers={}){
     const r=await mf.dispatchFetch(origin+path,{method,headers:{Origin:origin,'Content-Type':'application/json',...auth,...headers},body:body===undefined?undefined:JSON.stringify(body)});
@@ -61,5 +88,5 @@ try{
     result=await call(path);assert.equal(result.r.status,200,JSON.stringify(result.data));assert.equal(result.data.some(product=>product.id===id),false,`Producto eliminado no reaparece tras reiniciar: ${path}`);
   }
   result=await call('/api/categories');assert.equal(result.r.status,200,JSON.stringify(result.data));assert.equal(result.data.some(category=>category.name==='Prueba'),false,'Categoría eliminada no reaparece tras reiniciar');
-  console.log('Workers: administración, autorización, fotos, categorías, productos, inventario, eliminación, bloqueo de ventas y persistencia verificados.');
+  console.log('Workers: rangos MP4 para Safari, administración, autorización, fotos, categorías, productos, inventario, eliminación, bloqueo de ventas y persistencia verificados.');
 }finally{if(mf)await mf.dispose();await rm(directory,{recursive:true,force:true});}

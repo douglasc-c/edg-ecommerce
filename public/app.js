@@ -54,87 +54,111 @@ function bindStoreHeader(){
 }
 let teardownCampaignMotion=()=>{};
 let campaignIntroComplete=false;
+let storeMotionEnabled=false;
 function campaignHero(){
   return `<section class="campaign${campaignIntroComplete?' is-ready':''}" aria-labelledby="campaign-title">
     <span class="eyebrow campaign-reveal">ORIGINAL . BARCELONA</span><h1 id="campaign-title" class="sr-only">EDG Skateboards</h1>
     <div class="campaign-body"><div class="campaign-media">
       <img class="campaign-poster" src="/edg-logo-tremor-poster.png" width="848" height="480" alt="" fetchpriority="high" decoding="async">
-      <video id="campaign-intro" class="campaign-video campaign-intro" width="848" height="480" data-src="/edg-intro.mp4" poster="/edg-intro-poster.jpg" muted playsinline preload="none" aria-hidden="true"></video>
-      <video id="campaign-video" class="campaign-video campaign-loop" width="848" height="480" data-src="/edg-logo-tremor-loop.mp4" poster="/edg-logo-tremor-poster.png" muted loop playsinline preload="none" aria-hidden="true"></video>
+      <video id="campaign-video" class="campaign-video" width="848" height="480" data-intro-src="/edg-intro.mp4" data-loop-src="/edg-logo-tremor-loop.mp4" poster="/edg-intro-poster.jpg" muted playsinline preload="none" aria-hidden="true"></video>
+      <button type="button" class="campaign-play" hidden><span aria-hidden="true">▶</span><span class="campaign-play-label">Reproducir vídeo</span></button>
     </div><p class="campaign-description campaign-reveal">Skateboarding y cultura urbana.</p><a class="btn campaign-cta campaign-reveal" href="#catalog">Explorar la colección <span aria-hidden="true">↗</span></a></div>
   </section>`;
 }
 function bindCampaignMotion(){
-  const intro=$('#campaign-intro'),video=$('#campaign-video');
-  if(!intro||!video)return ()=>{};
+  const video=$('#campaign-video');
+  if(!video)return ()=>{};
   const campaign=video.closest('.campaign'),preference=window.matchMedia('(prefers-reduced-motion: reduce)');
+  const playButton=campaign.querySelector('.campaign-play'),playLabel=playButton.querySelector('.campaign-play-label');
   const controller=new AbortController(),options={signal:controller.signal};
-  let visible=false,disposed=false,loopFailed=false,autoplayBlocked=false,introTimeout;
-  let introFinished=campaignIntroComplete||preference.matches;
-  intro.muted=video.muted=true;
-  const activeVideo=()=>introFinished?video:intro;
-  const shouldPlay=()=>!disposed&&!autoplayBlocked&&!(introFinished&&loopFailed)&&visible&&!document.hidden&&!preference.matches;
-  const loadVideo=media=>{
-    if(!media.getAttribute('src')){media.preload='auto';media.src=media.dataset.src;}
+  let visible=false,disposed=false,playbackBlocked=false,introTimeout;
+  let introFinished=campaignIntroComplete;
+  video.muted=video.defaultMuted=true;video.playsInline=true;
+  const motionAllowed=()=>!preference.matches||storeMotionEnabled;
+  const shouldPlay=()=>!disposed&&!playbackBlocked&&visible&&!document.hidden&&motionAllowed();
+  const updatePlayButton=()=>{
+    playButton.hidden=disposed||(!playbackBlocked&&motionAllowed());
+    playLabel.textContent=motionAllowed()?'Reproducir vídeo':'Activar animaciones';
   };
-  function revealCampaign({autoplay=true,still=false}={}){
+  function showContent({still=false}={}){
+    campaign.classList.add('is-ready');
+    if(still)campaign.classList.remove('has-video');
+  }
+  function finishIntro(){
     if(disposed)return;
     introFinished=campaignIntroComplete=true;
-    clearTimeout(introTimeout);introTimeout=undefined;intro.pause();
-    campaign.classList.add('is-ready');
-    if(still||loopFailed)campaign.classList.remove('has-intro','has-video');
-    if(autoplay)updatePlayback();
+    clearTimeout(introTimeout);introTimeout=undefined;
+    // The final-frame poster covers the source change. Reusing this element also
+    // preserves Safari's playback permission when a tap was needed for the intro.
+    showContent({still:true});
+    updatePlayback();
+  }
+  function blockPlayback(){
+    playbackBlocked=true;video.pause();
+    clearTimeout(introTimeout);introTimeout=undefined;
+    showContent({still:true});updatePlayButton();
   }
   function updatePlayback(){
     if(!shouldPlay()){
-      intro.pause();video.pause();clearTimeout(introTimeout);introTimeout=undefined;return;
+      video.pause();clearTimeout(introTimeout);introTimeout=undefined;return;
     }
-    const media=activeVideo();
-    loadVideo(media);
+    const source=introFinished?video.dataset.loopSrc:video.dataset.introSrc;
+    if(video.getAttribute('src')!==source){
+      campaign.classList.remove('has-video');
+      video.loop=introFinished;video.preload='auto';
+      video.poster=introFinished?'/edg-logo-tremor-poster.png':'/edg-intro-poster.jpg';
+      video.src=source;
+    }
     if(!introFinished){
-      // Buffer the small loop while the original intro plays; both keep the same framing.
-      if(!loopFailed)loadVideo(video);
       // A stalled intro must not indefinitely hide the collection link.
-      if(!introTimeout)introTimeout=setTimeout(()=>{introTimeout=undefined;if(shouldPlay()&&!introFinished)revealCampaign({still:true});},8000);
+      if(!introTimeout)introTimeout=setTimeout(()=>{introTimeout=undefined;if(shouldPlay()&&!introFinished)finishIntro();},8000);
     }
-    if(media.paused)media.play().then(()=>{
-      if(media!==activeVideo()||!shouldPlay())media.pause();
+    if(video.paused)video.play().then(()=>{
+      if(!shouldPlay())video.pause();
     }).catch(error=>{
-      if(disposed||media!==activeVideo()||!shouldPlay()||error.name==='AbortError')return;
-      autoplayBlocked=true;
-      revealCampaign({autoplay:false,still:true});
+      if(disposed||source!==video.getAttribute('src')||!shouldPlay()||error.name==='AbortError')return;
+      blockPlayback();
     });
   }
-  intro.addEventListener('playing',()=>{
-    if(!introFinished&&shouldPlay())campaign.classList.add('has-intro');
-    else intro.pause();
-  },options);
-  intro.addEventListener('ended',()=>revealCampaign(),options);
-  intro.addEventListener('error',()=>{if(!introFinished)revealCampaign({still:true});},options);
   video.addEventListener('playing',()=>{
-    if(introFinished&&shouldPlay()){
-      campaign.classList.add('has-video');campaign.classList.remove('has-intro');
+    if(shouldPlay()){
+      campaign.classList.add('has-video');playButton.hidden=true;
     }else video.pause();
   },options);
+  video.addEventListener('ended',()=>{if(!introFinished)finishIntro();},options);
   video.addEventListener('error',()=>{
-    loopFailed=true;video.pause();campaign.classList.remove('has-video');
-    if(introFinished)campaign.classList.remove('has-intro');
+    if(!introFinished)finishIntro();
+    else blockPlayback();
+  },options);
+  playButton.addEventListener('click',()=>{
+    storeMotionEnabled=true;playbackBlocked=false;playButton.hidden=true;
+    const carousel=$('.deck-carousel');
+    if(carousel){carousel.classList.add('is-motion-enabled');carousel.querySelector('.deck-carousel-window').scrollLeft=0;}
+    if(!introFinished)campaign.classList.remove('is-ready');
+    if(video.error)video.removeAttribute('src');
+    const bounds=campaign.getBoundingClientRect();
+    visible=bounds.bottom>0&&bounds.top<window.innerHeight&&bounds.right>0&&bounds.left<window.innerWidth;
+    // Call play synchronously from the tap, without waiting for media events.
+    updatePlayback();
   },options);
   preference.addEventListener('change',()=>{
-    if(preference.matches)revealCampaign({still:true});
-    else updatePlayback();
+    storeMotionEnabled=false;
+    $('.deck-carousel')?.classList.remove('is-motion-enabled');
+    if(preference.matches)showContent({still:true});
+    else if(!introFinished)campaign.classList.remove('is-ready');
+    updatePlayButton();updatePlayback();
   },options);
   document.addEventListener('visibilitychange',updatePlayback,options);
-  if(introFinished)revealCampaign({autoplay:false,still:true});
+  window.addEventListener('pageshow',updatePlayback,options);
+  if(introFinished||!motionAllowed())showContent({still:true});
+  updatePlayButton();
   const observer=new IntersectionObserver(entries=>{visible=entries[0].isIntersecting;updatePlayback();});
   observer.observe(campaign);
   return ()=>{
     // Navigating during the intro should not replay it when returning to the store.
-    if(intro.currentTime>0)campaignIntroComplete=true;
+    if(!introFinished&&video.currentTime>0)campaignIntroComplete=true;
     disposed=true;observer.disconnect();controller.abort();clearTimeout(introTimeout);
-    for(const media of [intro,video]){
-      media.pause();if(media.getAttribute('src')){media.removeAttribute('src');media.load();}
-    }
+    video.pause();if(video.getAttribute('src')){video.removeAttribute('src');video.load();}
   };
 }
 function storeShell(content) {
@@ -164,7 +188,7 @@ const shuffledDeckDesigns=(()=>{
 })();
 function deckCarousel(){
   const group=duplicate=>`<div class="deck-carousel-group" ${duplicate?'aria-hidden="true"':''}>${shuffledDeckDesigns.map(([id,label])=>`<img src="/shape-${id}.webp" alt="${duplicate?'':escape(`Tabla EDG · ${label}`)}" width="1200" height="300" loading="lazy" decoding="async">`).join('')}</div>`;
-  return `<section class="deck-carousel" aria-label="Diseños de tablas EDG"><div class="deck-carousel-window"><div class="deck-carousel-track">${group(false)}${group(true)}</div></div></section>`;
+  return `<section class="deck-carousel${storeMotionEnabled?' is-motion-enabled':''}" aria-label="Diseños de tablas EDG"><div class="deck-carousel-window"><div class="deck-carousel-track">${group(false)}${group(true)}</div></div></section>`;
 }
 function storePage(){return storeShell(`${campaignHero()}${deckCarousel()}<section id="catalog" class="collection-section"><div class="section-head"><div><span class="eyebrow">Descubre / La selección EDG</span><h2>LA COLECCIÓN.</h2></div><span class="collection-count">${state.products.length} productos</span></div><div class="filters">${['Todos',...new Set(state.products.map(p=>p.category))].map(c=>`<button class="filter ${state.category===c?'active':''}" data-action="filter" data-category="${escape(c)}">${escape(c)}</button>`).join('')}<label class="search"><span class="sr-only">Buscar productos</span><input id="product-search" placeholder="Buscar en la colección…" value="${escape(state.search)}"></label></div><div class="product-grid" id="product-grid">${productCards()}</div></section><section class="category-section"><div class="section-head"><h2>DESCUBRE MÁS.</h2><a href="#catalog">Ver todo ↗</a></div><div class="category-grid">${categoryCards()}</div></section><section class="brand-statement"><span class="eyebrow">El universo EDG</span><h2>MÁS IDENTIDAD.<br>MENOS DE LO MISMO.</h2><a class="btn" href="#catalog">Encuentra tu próxima elección ↗</a></section>`);}
 function cartPage(){if(catalogMode())return storeShell(empty('Próximamente podrás comprar','Estamos preparando la tienda. Descubre nuestro catálogo.')+'<a class="btn" href="#store">Ver productos</a>');return storeShell(`<div class="page-title"><div><span class="eyebrow">Tu selección</span><h1>Mi carrito</h1><p>Revisa tus productos y continúa con el envío.</p></div><a class="btn" href="#store">Seguir comprando</a></div>${!state.user?empty('Inicia sesión para acceder a tu carrito','Crea una cuenta o inicia sesión para empezar tu compra.')+ '<button class="btn primary" data-action="login">Acceder a mi cuenta</button>':!state.cart.items.length?empty('Tu carrito está vacío','Explora la tienda y añade tus productos favoritos.'):`<div class="cart-layout"><div class="panel">${state.cart.items.map(p=>`<div class="cart-row"><span class="cart-icon ${colorClass(p.color)}">${escape(p.icon)}</span><div><h3>${escape(p.name)}</h3><p class="muted">${money(p.price)} por unidad</p><div class="quantity"><button data-action="quantity" data-id="${p.id}" data-delta="-1" aria-label="Reducir cantidad">−</button><span>${p.quantity}</span><button data-action="quantity" data-id="${p.id}" data-delta="1" aria-label="Aumentar cantidad">+</button><button data-action="remove" data-id="${p.id}" aria-label="Eliminar producto">×</button></div></div><strong class="price">${money(p.price*p.quantity)}</strong></div>`).join('')}</div><aside class="summary"><h2>Resumen de la compra</h2><div class="sum-row"><span>Productos</span><span>${money(state.cart.subtotal)}</span></div><div class="sum-row"><span>Envío</span><span>Calculado al finalizar la compra</span></div><div class="sum-row total"><span>Subtotal</span><span>${money(state.cart.subtotal)}</span></div><button class="btn primary" data-action="checkout">Continuar con el envío →</button><p class="form-help">Las existencias se reservarán al confirmar el pedido.</p></aside></div>`}`);}

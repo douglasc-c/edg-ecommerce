@@ -10,6 +10,7 @@ import { passwordRecovery,emailProvider } from './password-reset.mjs';
 import { fiscalProvider,invoiceService } from './invoices.mjs';
 import { sendcloudProvider } from './sendcloud.mjs';
 import { europeShipping } from './europe-shipping.mjs';
+import { campaignVideoPaths, campaignVideoResponse } from './video-response.mjs';
 import { HttpError, requireThat, text, integer, email, postal, passwordHash, passwordMatches, roles, permissions, token, hash, now } from './security.mjs';
 export function configuration(env=process.env) {
   const c={url:(env.APP_URL||'http://localhost:3000').replace(/\/$/,''),mode:env.COMMERCE_MODE||'demo',production:env.NODE_ENV==='production',reservationMinutes:Number(env.RESERVATION_MINUTES||30),storeName:env.STORE_NAME||'EDG Commerce',mpToken:env.MERCADO_PAGO_ACCESS_TOKEN,mpSecret:env.MERCADO_PAGO_WEBHOOK_SECRET,collectorId:env.MERCADO_PAGO_COLLECTOR_ID,meToken:env.MELHOR_ENVIO_TOKEN,meSecret:env.MELHOR_ENVIO_WEBHOOK_SECRET,meSandbox:env.MELHOR_ENVIO_SANDBOX!=='false',originPostal:env.ORIGIN_POSTAL_CODE,supportEmail:env.SUPPORT_EMAIL,shippingFrom:env.SHIPPING_FROM_JSON?JSON.parse(env.SHIPPING_FROM_JSON):null};
@@ -231,6 +232,10 @@ export function createApp({db=database(),config=configuration(),provider=provide
       files['/edg-intro-poster.jpg']='edg-intro-poster.jpg';
       const filename=files[url.pathname];requireThat(filename,404,'Página no encontrada.');
       const content=await readFile(new URL(`../public/${filename}`,import.meta.url));
+      if(campaignVideoPaths.has(url.pathname)){
+        const response=campaignVideoResponse(req,content,{'Cache-Control':'no-cache'});
+        res.writeHead(response.status,Object.fromEntries(response.headers));return res.end(response.body??undefined);
+      }
       res.writeHead(200,{'Content-Type':filename.endsWith('html')?'text/html; charset=utf-8':filename.endsWith('css')?'text/css; charset=utf-8':filename.endsWith('js')?'text/javascript; charset=utf-8':filename.endsWith('png')?'image/png':filename.endsWith('jpg')?'image/jpeg':filename.endsWith('webp')?'image/webp':filename.endsWith('mp4')?'video/mp4':'image/svg+xml','Cache-Control':'no-cache'});res.end(req.method==='HEAD'?undefined:content);
     }catch(e) {
       if(res.headersSent) return res.end();
