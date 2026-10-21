@@ -227,9 +227,11 @@ export function createApp({db=database(),config=configuration(),provider=provide
       for(const id of ['g61','g99','63','121','197','221','240','257','15','19','28','47','55','92','101'])files[`/shape-${id}.webp`]=`shape-${id}.webp`;
       files['/edg-logo-tremor-loop.mp4']='edg-logo-tremor-loop.mp4';
       files['/edg-logo-tremor-poster.png']='edg-logo-tremor-poster.png';
+      files['/edg-intro.mp4']='edg-intro.mp4';
+      files['/edg-intro-poster.jpg']='edg-intro-poster.jpg';
       const filename=files[url.pathname];requireThat(filename,404,'Página no encontrada.');
       const content=await readFile(new URL(`../public/${filename}`,import.meta.url));
-      res.writeHead(200,{'Content-Type':filename.endsWith('html')?'text/html; charset=utf-8':filename.endsWith('css')?'text/css; charset=utf-8':filename.endsWith('js')?'text/javascript; charset=utf-8':filename.endsWith('png')?'image/png':filename.endsWith('webp')?'image/webp':filename.endsWith('mp4')?'video/mp4':'image/svg+xml','Cache-Control':'no-cache'});res.end(req.method==='HEAD'?undefined:content);
+      res.writeHead(200,{'Content-Type':filename.endsWith('html')?'text/html; charset=utf-8':filename.endsWith('css')?'text/css; charset=utf-8':filename.endsWith('js')?'text/javascript; charset=utf-8':filename.endsWith('png')?'image/png':filename.endsWith('jpg')?'image/jpeg':filename.endsWith('webp')?'image/webp':filename.endsWith('mp4')?'video/mp4':'image/svg+xml','Cache-Control':'no-cache'});res.end(req.method==='HEAD'?undefined:content);
     }catch(e) {
       if(res.headersSent) return res.end();
       const status=e instanceof HttpError?e.status:500;

@@ -27,57 +27,108 @@ const demoBanner=()=>catalogMode()?'<div class="demo">TIENDA EN PREPARACIÓN · 
 const brand=()=>`<a class="brand" href="#store"><span class="brand-logo"><img src="/edg-logo.png" alt="EDG"></span></a>`;
 let teardownCampaignMotion=()=>{};
 let campaignMotionPaused=false;
+let campaignIntroComplete=false;
 function campaignHero(){
-  return `<section class="campaign" aria-labelledby="campaign-title">
-    <span class="eyebrow">EDG / Skateboards</span><h1 id="campaign-title" class="sr-only">EDG Skateboards</h1>
+  return `<section class="campaign${campaignIntroComplete?' is-ready':''}" aria-labelledby="campaign-title">
+    <span class="eyebrow campaign-reveal">EDG / Skateboards</span><h1 id="campaign-title" class="sr-only">EDG Skateboards</h1>
     <div class="campaign-body"><div class="campaign-media">
       <img class="campaign-poster" src="/edg-logo-tremor-poster.png" width="848" height="480" alt="" fetchpriority="high" decoding="async">
-      <video id="campaign-video" class="campaign-video" width="848" height="480" data-src="/edg-logo-tremor-loop.mp4" poster="/edg-logo-tremor-poster.png" muted loop playsinline preload="none" aria-hidden="true"></video>
-    </div><p class="campaign-description">Skateboarding y cultura urbana.</p><a class="btn campaign-cta" href="#catalog">Explorar la colección <span aria-hidden="true">↗</span></a></div>
-    <div class="campaign-footer"><span class="campaign-caption">ORIGINAL . BARCELONA</span><button id="campaign-motion-toggle" class="campaign-motion-toggle" type="button" aria-controls="campaign-video" hidden><span class="campaign-motion-label">Reproducir animación</span><span class="campaign-motion-icon" aria-hidden="true">↻</span></button></div>
+      <video id="campaign-intro" class="campaign-video campaign-intro" width="848" height="480" data-src="/edg-intro.mp4" poster="/edg-intro-poster.jpg" muted playsinline preload="none" aria-hidden="true"></video>
+      <video id="campaign-video" class="campaign-video campaign-loop" width="848" height="480" data-src="/edg-logo-tremor-loop.mp4" poster="/edg-logo-tremor-poster.png" muted loop playsinline preload="none" aria-hidden="true"></video>
+    </div><p class="campaign-description campaign-reveal">Skateboarding y cultura urbana.</p><a class="btn campaign-cta campaign-reveal" href="#catalog">Explorar la colección <span aria-hidden="true">↗</span></a></div>
+    <div class="campaign-footer campaign-reveal"><span class="campaign-caption">ORIGINAL . BARCELONA</span><button id="campaign-motion-toggle" class="campaign-motion-toggle" type="button" aria-controls="campaign-video" hidden><span class="campaign-motion-label">Reproducir animación</span><span class="campaign-motion-icon" aria-hidden="true">↻</span></button></div>
   </section>`;
 }
 function bindCampaignMotion(){
-  const video=$('#campaign-video'),button=$('#campaign-motion-toggle');
-  if(!video||!button)return ()=>{};
+  const intro=$('#campaign-intro'),video=$('#campaign-video'),button=$('#campaign-motion-toggle');
+  if(!intro||!video||!button)return ()=>{};
   const campaign=video.closest('.campaign'),preference=window.matchMedia('(prefers-reduced-motion: reduce)');
   const controller=new AbortController(),options={signal:controller.signal};
-  let visible=false,manualMotion=false,disposed=false,failed=false;
-  video.muted=true;
+  let visible=false,manualMotion=false,disposed=false,loopFailed=false,autoplayBlocked=false,introTimeout;
+  let introFinished=campaignIntroComplete||preference.matches;
+  intro.muted=video.muted=true;
+  // Reserve the footer's space while its parent is hidden during the intro.
   button.hidden=false;
-  const shouldPlay=()=>!disposed&&!failed&&visible&&!document.hidden&&!campaignMotionPaused&&(!preference.matches||manualMotion);
+  const activeVideo=()=>introFinished?video:intro;
+  const shouldPlay=()=>!disposed&&!autoplayBlocked&&!(introFinished&&loopFailed)&&visible&&!document.hidden&&!campaignMotionPaused&&(!preference.matches||manualMotion);
+  const loadVideo=media=>{
+    if(!media.getAttribute('src')){media.preload='auto';media.src=media.dataset.src;}
+  };
   const updateControl=()=>{
     if(disposed)return;
     button.querySelector('.campaign-motion-label').textContent=video.paused?'Reproducir animación':'Pausar animación';
     button.querySelector('.campaign-motion-icon').textContent=video.paused?'↻':'Ⅱ';
   };
-  const updatePlayback=()=>{
-    if(!shouldPlay()){video.pause();updateControl();return;}
-    if(!video.getAttribute('src'))video.src=video.dataset.src;
-    if(video.paused)video.play().then(()=>{if(!shouldPlay())video.pause();}).catch(updateControl);
-  };
+  function revealCampaign({autoplay=true,still=false}={}){
+    if(disposed)return;
+    introFinished=campaignIntroComplete=true;
+    clearTimeout(introTimeout);introTimeout=undefined;intro.pause();
+    campaign.classList.add('is-ready');
+    if(still||loopFailed)campaign.classList.remove('has-intro','has-video');
+    button.hidden=loopFailed;
+    updateControl();
+    if(autoplay)updatePlayback();
+  }
+  function updatePlayback(){
+    if(!shouldPlay()){
+      intro.pause();video.pause();clearTimeout(introTimeout);introTimeout=undefined;updateControl();return;
+    }
+    const media=activeVideo();
+    loadVideo(media);
+    if(!introFinished){
+      // Buffer the small loop while the original intro plays; both keep the same framing.
+      if(!loopFailed)loadVideo(video);
+      // A stalled intro must not indefinitely hide the collection link.
+      if(!introTimeout)introTimeout=setTimeout(()=>{introTimeout=undefined;if(shouldPlay()&&!introFinished)revealCampaign({still:true});},8000);
+    }
+    if(media.paused)media.play().then(()=>{
+      if(media!==activeVideo()||!shouldPlay())media.pause();
+    }).catch(error=>{
+      if(disposed||media!==activeVideo()||!shouldPlay()||error.name==='AbortError')return;
+      autoplayBlocked=true;
+      if(!introFinished)revealCampaign({autoplay:false,still:true});
+      else updateControl();
+    });
+  }
   button.addEventListener('click',()=>{
     campaignMotionPaused=!video.paused;
-    if(!campaignMotionPaused)manualMotion=true;
+    if(!campaignMotionPaused){manualMotion=true;autoplayBlocked=false;}
     updatePlayback();
   },options);
+  intro.addEventListener('playing',()=>{
+    if(!introFinished&&shouldPlay())campaign.classList.add('has-intro');
+    else intro.pause();
+  },options);
+  intro.addEventListener('ended',()=>revealCampaign(),options);
+  intro.addEventListener('error',()=>{if(!introFinished)revealCampaign({still:true});},options);
   video.addEventListener('play',updateControl,options);
   video.addEventListener('pause',updateControl,options);
-  video.addEventListener('playing',()=>{campaign.classList.add('has-video');updateControl();},options);
+  video.addEventListener('playing',()=>{
+    if(introFinished&&shouldPlay()){
+      campaign.classList.add('has-video');campaign.classList.remove('has-intro');
+    }else video.pause();
+    updateControl();
+  },options);
   video.addEventListener('error',()=>{
-    failed=true;video.pause();campaign.classList.remove('has-video');button.hidden=true;
+    loopFailed=true;video.pause();campaign.classList.remove('has-video');
+    if(introFinished){campaign.classList.remove('has-intro');button.hidden=true;}
   },options);
   preference.addEventListener('change',()=>{
     manualMotion=false;
-    if(preference.matches)campaign.classList.remove('has-video');
-    updatePlayback();
+    if(preference.matches)revealCampaign({still:true});
+    else updatePlayback();
   },options);
   document.addEventListener('visibilitychange',updatePlayback,options);
+  if(introFinished)revealCampaign({autoplay:false,still:true});
   const observer=new IntersectionObserver(entries=>{visible=entries[0].isIntersecting;updatePlayback();});
   observer.observe(campaign);
   return ()=>{
-    disposed=true;observer.disconnect();controller.abort();video.pause();
-    if(video.getAttribute('src')){video.removeAttribute('src');video.load();}
+    // Navigating during the intro should not replay it when returning to the store.
+    if(intro.currentTime>0)campaignIntroComplete=true;
+    disposed=true;observer.disconnect();controller.abort();clearTimeout(introTimeout);
+    for(const media of [intro,video]){
+      media.pause();if(media.getAttribute('src')){media.removeAttribute('src');media.load();}
+    }
   };
 }
 function storeShell(content) {
