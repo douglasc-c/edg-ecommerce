@@ -30,6 +30,11 @@ test('abrir y recargar #catalog conserva el hero y los enlaces llevan a la colec
   await expect(collection).toBeInViewport({ratio:1});
 
   const header=page.getByRole('banner');
+  // Reveal the directional header through upward scrolling before clicking it.
+  const collectionScroll=await page.evaluate(()=>scrollY);
+  await page.mouse.wheel(0,-200);
+  await expect.poll(()=>page.evaluate(()=>scrollY)).toBeLessThan(collectionScroll);
+  await expect.poll(async()=>Math.abs((await header.boundingBox()).y)).toBeLessThanOrEqual(1);
   await header.getByRole('link',{name:'Inicio',exact:true}).click();
   await expect(page).toHaveURL(/#store$/);
   await page.mouse.wheel(0,-5000);

@@ -26,30 +26,57 @@ const catalogMode=()=>state.config?.mode==='catalog';
 const demoBanner=()=>catalogMode()?'<div class="demo">TIENDA EN PREPARACIÓN · Descubre los productos. Próximamente podrás comprar.</div>':state.config.mode==='demo'?'<div class="demo">ENTORNO DE DEMOSTRACIÓN · Pagos y envíos simulados, sin cargos reales.</div>':'';
 const brand=()=>`<a class="brand" href="#store"><span class="brand-logo"><img src="/edg-logo.png" alt="EDG"></span></a>`;
 let teardownStoreHeader=()=>{};
+let storeHeaderHidden=false;
 const isStoreHeaderScrolled=()=>window.scrollY>24;
 function bindStoreHeader(){
   const header=$('.store-header');
   if(!header)return ()=>{};
   const logo=header.querySelector('.store-header-brand'),home=header.querySelector('.toplinks a[href="#store"]'),main=header.nextElementSibling;
-  const controller=new AbortController();
-  let frame=0,scrolled;
+  const controller=new AbortController(),options={signal:controller.signal};
+  // Safari can report positions outside the document during elastic scrolling.
+  const scrollPosition=()=>Math.max(0,Math.min(window.scrollY,Math.max(0,document.documentElement.scrollHeight-document.documentElement.clientHeight)));
+  const hasKeyboardFocus=()=>!!header.querySelector(':focus-visible');
+  let frame=0,scrolled,hidden=storeHeaderHidden,lastScroll=scrollPosition(),direction=0,travel=0,hideAfter=0;
+  const setHidden=next=>{
+    if(next===hidden)return;
+    hidden=storeHeaderHidden=next;header.classList.toggle('is-scroll-hidden',next);
+  };
+  const resetDirection=()=>{lastScroll=scrollPosition();direction=travel=0;};
   const update=()=>{
     frame=0;
-    const next=isStoreHeaderScrolled();
-    if(next===scrolled)return;
-    scrolled=next;
-    if(!scrolled&&logo.contains(document.activeElement))home.focus({preventScroll:true});
-    header.classList.toggle('is-scrolled',scrolled);
-    logo.inert=!scrolled;
-    logo.setAttribute('aria-hidden',String(!scrolled));
+    const position=scrollPosition(),delta=position-lastScroll,next=position>24;
+    lastScroll=position;
+    if(next!==scrolled){
+      scrolled=next;
+      if(!scrolled&&logo.contains(document.activeElement))home.focus({preventScroll:true});
+      header.classList.toggle('is-scrolled',scrolled);
+      logo.inert=!scrolled;
+      logo.setAttribute('aria-hidden',String(!scrolled));
+    }
+    // Keep the header in place until content can fill the space behind it.
+    if(position<=hideAfter||hasKeyboardFocus()){setHidden(false);direction=travel=0;return;}
+    if(!delta)return;
+    const nextDirection=Math.sign(delta);
+    if(nextDirection!==direction){direction=nextDirection;travel=0;}
+    travel+=Math.abs(delta);
+    // Ignore tiny reversals without delaying a deliberate change of direction.
+    if(travel>=12){setHidden(direction>0);travel=0;}
   };
   const schedule=()=>{if(!frame)frame=requestAnimationFrame(update);};
-  const measure=()=>main.style.setProperty('--store-header-height',`${header.getBoundingClientRect().height}px`);
-  update();measure();
+  const measure=()=>{
+    main.style.setProperty('--store-header-height',`${header.getBoundingClientRect().height}px`);
+    hideAfter=main.getBoundingClientRect().top+window.scrollY;
+  };
+  const resync=()=>{measure();resetDirection();schedule();};
+  measure();update();
   const observer=new ResizeObserver(measure);
   observer.observe(header);
   window.addEventListener('scroll',schedule,{passive:true,signal:controller.signal});
-  window.addEventListener('pageshow',schedule,{signal:controller.signal});
+  window.addEventListener('resize',resync,options);
+  window.addEventListener('pageshow',resync,options);
+  header.addEventListener('focusin',()=>{
+    if(hasKeyboardFocus()){setHidden(false);resetDirection();}
+  },options);
   return ()=>{controller.abort();observer.disconnect();cancelAnimationFrame(frame);};
 }
 let teardownCampaignMotion=()=>{};
@@ -255,7 +282,7 @@ function bindCampaignMotion(){
 function storeShell(content) {
   const count=state.cart.items.reduce((s,p)=>s+p.quantity,0);
   const scrolled=isStoreHeaderScrolled();
-  return `${demoBanner()}<header class="topbar store-header${scrolled?' is-scrolled':''}"><div class="store-header-brand"${scrolled?'':' inert aria-hidden="true"'}>${brand()}</div><nav class="toplinks"><a href="#store">Inicio</a><a href="#catalog">Colección</a><a href="#orders">Mis pedidos</a>${has('dashboard')?'<a href="#admin">Gestión</a>':''}</nav><div class="topactions">${state.user?`<button class="btn small" data-action="account">${escape(state.user.name.split(' ')[0])} · Mi cuenta</button>`:'<button class="btn small" data-action="login">Iniciar sesión</button>'}<a class="btn small" href="#cart">Carrito <span class="cart-count">${count}</span></a></div></header><main class="store-main">${content}<footer class="footer"><span>© ${new Date().getFullYear()} EDG</span><nav aria-label="Enlaces del pie de página"><a href="#catalog">Colección</a><a href="#orders">Mis pedidos</a><a href="#cart">Carrito</a></nav><a class="footer-brand" href="#store"><img class="sr-only" src="/edg-footer-logo.png" alt="EDG" width="1122" height="125" loading="lazy" decoding="async"></a></footer></main>`;
+  return `${demoBanner()}<header class="topbar store-header${scrolled?' is-scrolled':''}${scrolled&&storeHeaderHidden?' is-scroll-hidden':''}"><div class="store-header-brand"${scrolled?'':' inert aria-hidden="true"'}>${brand()}</div><nav class="toplinks"><a href="#store">Inicio</a><a href="#catalog">Colección</a><a href="#orders">Mis pedidos</a>${has('dashboard')?'<a href="#admin">Gestión</a>':''}</nav><div class="topactions">${state.user?`<button class="btn small" data-action="account">${escape(state.user.name.split(' ')[0])} · Mi cuenta</button>`:'<button class="btn small" data-action="login">Iniciar sesión</button>'}<a class="btn small" href="#cart">Carrito <span class="cart-count">${count}</span></a></div></header><main class="store-main">${content}<footer class="footer"><span>© ${new Date().getFullYear()} EDG</span><nav aria-label="Enlaces del pie de página"><a href="#catalog">Colección</a><a href="#orders">Mis pedidos</a><a href="#cart">Carrito</a></nav><a class="footer-brand" href="#store"><img class="sr-only" src="/edg-footer-logo.png" alt="EDG" width="1122" height="125" loading="lazy" decoding="async"></a></footer></main>`;
 }
 function productCards(){
   const items=state.products.filter(p=>(state.category==='Todos'||p.category===state.category)&&`${p.name} ${p.sku}`.toLowerCase().includes(state.search.toLowerCase()));
@@ -350,7 +377,7 @@ async function render({scrollToCatalog=false}={}){const version=++renderVersion;
   }
   if(version!==renderVersion)return;teardownCampaignMotion();teardownStoreHeader();$('#app').innerHTML=html;teardownStoreHeader=bindStoreHeader();teardownCampaignMotion=bindCampaignMotion();if(needsLogin)authDialog();
   if(page==='stock'){const rows=await api('/admin/movements');if(version!==renderVersion)return;$('#movements').innerHTML=rows.length?`<div class="table-wrap"><table><thead><tr><th>Producto</th><th>Variación</th><th>Motivo</th><th>Responsable</th><th>Fecha</th></tr></thead><tbody>${rows.map(r=>`<tr><td>${escape(r.product_name)}</td><td>${r.quantity>0?'+':''}${r.quantity}</td><td>${escape(r.reason)}</td><td>${escape(r.actor_name||'Sistema')}</td><td>${date(r.created_at)}</td></tr>`).join('')}</tbody></table></div>`:empty('No hay movimientos');}
-  if(scrollToCatalog&&location.hash==='#catalog')$('#catalog')?.scrollIntoView({behavior:'smooth'});
+  if(scrollToCatalog&&location.hash==='#catalog')$('#catalog')?.scrollIntoView({behavior:window.matchMedia('(prefers-reduced-motion:reduce)').matches?'auto':'smooth'});
 }catch(e){toast(e.message,true);if(!$('#app').children.length)$('#app').innerHTML=empty('No se ha podido cargar','Actualiza la página para volver a intentarlo.');}}
 function authDialog(register=false){dialog(register?'Crea tu cuenta':'Te damos la bienvenida',`<p class="muted">${register?'Regístrate para comprar y consultar tus pedidos.':'Inicia sesión para acceder a tu tienda y tus pedidos.'}</p><form id="auth-form" data-register="${register}">${register?field('name','Nombre completo','','text','required minlength="2" autocomplete="name"'):''}${field('email','Correo electrónico','','email','required autocomplete="email"')}${field('password','Contraseña','','password',`required ${register?'minlength="12"':''} maxlength="128" autocomplete="${register?'new-password':'current-password'}"`)}${register?'<p class="form-help">Utiliza una contraseña exclusiva de al menos 12 caracteres.</p>':''}<div class="form-actions"><button class="btn primary" type="submit">${register?'Crear cuenta':'Iniciar sesión'}</button></div></form>${!register?'<div class="switch-auth"><button data-action="forgot">He olvidado mi contraseña</button></div>':''}<div class="switch-auth">${register?'¿Ya tienes cuenta?':'¿Todavía no tienes cuenta?'}<button data-action="${register?'login':'register'}">${register?'Iniciar sesión':'Crear mi cuenta'}</button></div>`);}
 function accountDialog(){dialog('Mi cuenta',`<h3>${escape(state.user.name)}</h3><p class="muted">${escape(state.user.email)} · ${roleNames[state.user.role]}</p><div class="stack form-actions">${has('dashboard')?'<a class="btn" href="#admin" data-action="close">Acceder a la gestión</a>':''}<button class="btn" data-action="password">Cambiar contraseña</button><button class="btn danger" data-action="logout">Cerrar sesión</button></div>`);}
