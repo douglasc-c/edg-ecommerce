@@ -54,57 +54,71 @@ function bindStoreHeader(){
 }
 let teardownCampaignMotion=()=>{};
 let campaignIntroComplete=false;
-let storeMotionEnabled=false;
 function campaignHero(){
   return `<section class="campaign${campaignIntroComplete?' is-ready':''}" aria-labelledby="campaign-title">
     <span class="eyebrow campaign-reveal">ORIGINAL . BARCELONA</span><h1 id="campaign-title" class="sr-only">EDG Skateboards</h1>
     <div class="campaign-body"><div class="campaign-media">
       <img class="campaign-poster" src="/edg-logo-tremor-poster.png" width="848" height="480" alt="" fetchpriority="high" decoding="async">
+      <img class="campaign-animation" width="848" height="480" alt="" decoding="async" data-intro-src="/edg-intro-animated.webp" data-loop-src="/edg-logo-tremor-animated.webp" hidden>
       <video id="campaign-video" class="campaign-video" width="848" height="480" data-intro-src="/edg-intro.mp4" data-loop-src="/edg-logo-tremor-loop.mp4" poster="/edg-intro-poster.jpg" muted playsinline preload="none" aria-hidden="true"></video>
-      <button type="button" class="campaign-play" hidden><span aria-hidden="true">▶</span><span class="campaign-play-label">Reproducir vídeo</span></button>
     </div><p class="campaign-description campaign-reveal">Skateboarding y cultura urbana.</p><a class="btn campaign-cta campaign-reveal" href="#catalog">Explorar la colección <span aria-hidden="true">↗</span></a></div>
   </section>`;
 }
 function bindCampaignMotion(){
   const video=$('#campaign-video');
   if(!video)return ()=>{};
-  const campaign=video.closest('.campaign'),preference=window.matchMedia('(prefers-reduced-motion: reduce)');
-  const playButton=campaign.querySelector('.campaign-play'),playLabel=playButton.querySelector('.campaign-play-label');
+  const campaign=video.closest('.campaign'),animation=campaign.querySelector('.campaign-animation');
   const controller=new AbortController(),options={signal:controller.signal};
-  let visible=false,disposed=false,playbackBlocked=false,introTimeout;
-  let introFinished=campaignIntroComplete;
+  let visible=false,disposed=false,usingImages=false,imageFailed=false,introImageStarted=false;
+  let introTimeout,imageLoadTimeout,introFinished=campaignIntroComplete;
   video.muted=video.defaultMuted=true;video.playsInline=true;
-  const motionAllowed=()=>!preference.matches||storeMotionEnabled;
-  const shouldPlay=()=>!disposed&&!playbackBlocked&&visible&&!document.hidden&&motionAllowed();
-  const updatePlayButton=()=>{
-    playButton.hidden=disposed||(!playbackBlocked&&motionAllowed());
-    playLabel.textContent=motionAllowed()?'Reproducir vídeo':'Activar animaciones';
-  };
+  const shouldPlay=()=>!disposed&&visible&&!document.hidden;
+  const clearIntroTimer=()=>{clearTimeout(introTimeout);introTimeout=undefined;};
+  function clearAnimation(){
+    clearTimeout(imageLoadTimeout);imageLoadTimeout=undefined;
+    animation.hidden=true;animation.removeAttribute('src');campaign.classList.remove('has-animation');
+  }
   function showContent({still=false}={}){
     campaign.classList.add('is-ready');
     if(still)campaign.classList.remove('has-video');
   }
   function finishIntro(){
     if(disposed)return;
-    introFinished=campaignIntroComplete=true;
-    // A failed intro can reject play() before dispatching its error event.
-    // That source's failure must not prevent the loop from being attempted.
-    playbackBlocked=false;
-    clearTimeout(introTimeout);introTimeout=undefined;
-    // The final-frame poster covers the source change. Reusing this element also
-    // preserves Safari's playback permission when a tap was needed for the intro.
-    showContent({still:true});
-    updatePlayButton();updatePlayback();
+    introFinished=campaignIntroComplete=true;clearIntroTimer();
+    // The final-frame poster covers both video and animated-image source changes.
+    showContent({still:true});updatePlayback();
   }
-  function blockPlayback(){
-    playbackBlocked=true;video.pause();
-    clearTimeout(introTimeout);introTimeout=undefined;
-    showContent({still:true});updatePlayButton();
+  function showStill(){
+    imageFailed=true;introFinished=campaignIntroComplete=true;
+    clearIntroTimer();clearAnimation();showContent({still:true});
+  }
+  function showAnimation(){
+    if(imageFailed)return;
+    const source=introFinished?animation.dataset.loopSrc:animation.dataset.introSrc;
+    if(animation.getAttribute('src')===source)return;
+    clearAnimation();
+    // A failed or slow alternative must not indefinitely hide the collection.
+    imageLoadTimeout=setTimeout(showStill,8000);
+    animation.src=source;
+  }
+  function useAnimatedImages(){
+    if(disposed||usingImages)return;
+    usingImages=true;clearIntroTimer();video.pause();
+    campaign.classList.remove('has-video');
+    // Video autoplay can be refused by iOS. The same frames remain automatic
+    // through animated images, without adding playback controls or needing a tap.
+    video.removeAttribute('src');video.load();updatePlayback();
   }
   function updatePlayback(){
     if(!shouldPlay()){
-      video.pause();clearTimeout(introTimeout);introTimeout=undefined;return;
+      video.pause();clearIntroTimer();
+      if(usingImages){
+        if(!introFinished&&introImageStarted){introFinished=campaignIntroComplete=true;showContent({still:true});}
+        clearAnimation();
+      }
+      return;
     }
+    if(usingImages){showAnimation();return;}
     const source=introFinished?video.dataset.loopSrc:video.dataset.introSrc;
     if(video.getAttribute('src')!==source){
       campaign.classList.remove('has-video');
@@ -112,61 +126,52 @@ function bindCampaignMotion(){
       video.poster=introFinished?'/edg-logo-tremor-poster.png':'/edg-intro-poster.jpg';
       video.src=source;
     }
-    if(!introFinished){
-      // A stalled intro must not indefinitely hide the collection link.
-      if(!introTimeout)introTimeout=setTimeout(()=>{introTimeout=undefined;if(shouldPlay()&&!introFinished)finishIntro();},8000);
+    if(!introFinished&&!introTimeout){
+      introTimeout=setTimeout(()=>{introTimeout=undefined;if(shouldPlay()&&!introFinished)finishIntro();},8000);
     }
     if(video.paused)video.play().then(()=>{
-      if(!shouldPlay())video.pause();
+      if(usingImages||!shouldPlay())video.pause();
     }).catch(error=>{
-      if(disposed||source!==video.getAttribute('src')||!shouldPlay()||error.name==='AbortError')return;
-      blockPlayback();
+      if(disposed||usingImages||source!==video.getAttribute('src')||!shouldPlay()||error.name==='AbortError')return;
+      if(error.name==='NotAllowedError'||introFinished)useAnimatedImages();
+      else finishIntro();
     });
   }
+  animation.addEventListener('load',()=>{
+    if(disposed||!usingImages||imageFailed||!animation.getAttribute('src')||!animation.complete||!animation.naturalWidth)return;
+    if(!shouldPlay()){updatePlayback();return;}
+    clearTimeout(imageLoadTimeout);imageLoadTimeout=undefined;
+    animation.hidden=false;campaign.classList.add('has-animation');
+    if(!introFinished){
+      introImageStarted=true;clearIntroTimer();
+      // This asset contains the original 3.4-second intro and plays exactly once.
+      introTimeout=setTimeout(finishIntro,3400);
+    }
+  },options);
+  animation.addEventListener('error',()=>{if(usingImages&&!disposed&&animation.getAttribute('src'))showStill();},options);
   video.addEventListener('playing',()=>{
-    if(shouldPlay()){
-      campaign.classList.add('has-video');playButton.hidden=true;
-    }else video.pause();
+    if(!usingImages&&shouldPlay())campaign.classList.add('has-video');
+    else video.pause();
   },options);
   video.addEventListener('ended',()=>{
-    if(!video.ended)return;
+    if(usingImages||!video.ended)return;
     if(!introFinished)return finishIntro();
-    // Explicit replay avoids native loop seeks that can stall in WebKit media
-    // backends. Keep this element so a prior tap still authorizes playback.
+    // Explicit replay avoids the stalled native loop seek in WebKit backends.
     video.currentTime=0;updatePlayback();
   },options);
   video.addEventListener('error',()=>{
+    if(disposed||usingImages||!video.error)return;
     if(!introFinished)finishIntro();
-    else blockPlayback();
-  },options);
-  playButton.addEventListener('click',()=>{
-    storeMotionEnabled=true;playbackBlocked=false;playButton.hidden=true;
-    const carousel=$('.deck-carousel');
-    if(carousel){carousel.classList.add('is-motion-enabled');carousel.querySelector('.deck-carousel-window').scrollLeft=0;}
-    if(!introFinished)campaign.classList.remove('is-ready');
-    if(video.error)video.removeAttribute('src');
-    const bounds=campaign.getBoundingClientRect();
-    visible=bounds.bottom>0&&bounds.top<window.innerHeight&&bounds.right>0&&bounds.left<window.innerWidth;
-    // Call play synchronously from the tap, without waiting for media events.
-    updatePlayback();
-  },options);
-  preference.addEventListener('change',()=>{
-    storeMotionEnabled=false;
-    $('.deck-carousel')?.classList.remove('is-motion-enabled');
-    if(preference.matches)showContent({still:true});
-    else if(!introFinished)campaign.classList.remove('is-ready');
-    updatePlayButton();updatePlayback();
+    else useAnimatedImages();
   },options);
   document.addEventListener('visibilitychange',updatePlayback,options);
   window.addEventListener('pageshow',updatePlayback,options);
-  if(introFinished||!motionAllowed())showContent({still:true});
-  updatePlayButton();
+  if(introFinished)showContent({still:true});
   const observer=new IntersectionObserver(entries=>{visible=entries[0].isIntersecting;updatePlayback();});
   observer.observe(campaign);
   return ()=>{
-    // Navigating during the intro should not replay it when returning to the store.
-    if(!introFinished&&video.currentTime>0)campaignIntroComplete=true;
-    disposed=true;observer.disconnect();controller.abort();clearTimeout(introTimeout);
+    if(!introFinished&&(video.currentTime>0||introImageStarted))campaignIntroComplete=true;
+    disposed=true;observer.disconnect();controller.abort();clearIntroTimer();clearAnimation();
     video.pause();if(video.getAttribute('src')){video.removeAttribute('src');video.load();}
   };
 }
@@ -197,7 +202,7 @@ const shuffledDeckDesigns=(()=>{
 })();
 function deckCarousel(){
   const group=duplicate=>`<div class="deck-carousel-group" ${duplicate?'aria-hidden="true"':''}>${shuffledDeckDesigns.map(([id,label])=>`<img src="/shape-${id}.webp" alt="${duplicate?'':escape(`Tabla EDG · ${label}`)}" width="1200" height="300" loading="lazy" decoding="async">`).join('')}</div>`;
-  return `<section class="deck-carousel${storeMotionEnabled?' is-motion-enabled':''}" aria-label="Diseños de tablas EDG"><div class="deck-carousel-window"><div class="deck-carousel-track">${group(false)}${group(true)}</div></div></section>`;
+  return `<section class="deck-carousel" aria-label="Diseños de tablas EDG"><div class="deck-carousel-window"><div class="deck-carousel-track">${group(false)}${group(true)}</div></div></section>`;
 }
 function storePage(){return storeShell(`${campaignHero()}${deckCarousel()}<section id="catalog" class="collection-section"><div class="section-head"><div><span class="eyebrow">Descubre / La selección EDG</span><h2>LA COLECCIÓN.</h2></div><span class="collection-count">${state.products.length} productos</span></div><div class="filters">${['Todos',...new Set(state.products.map(p=>p.category))].map(c=>`<button class="filter ${state.category===c?'active':''}" data-action="filter" data-category="${escape(c)}">${escape(c)}</button>`).join('')}<label class="search"><span class="sr-only">Buscar productos</span><input id="product-search" placeholder="Buscar en la colección…" value="${escape(state.search)}"></label></div><div class="product-grid" id="product-grid">${productCards()}</div></section><section class="category-section"><div class="section-head"><h2>DESCUBRE MÁS.</h2><a href="#catalog">Ver todo ↗</a></div><div class="category-grid">${categoryCards()}</div></section><section class="brand-statement"><span class="eyebrow">El universo EDG</span><h2>MÁS IDENTIDAD.<br>MENOS DE LO MISMO.</h2><a class="btn" href="#catalog">Encuentra tu próxima elección ↗</a></section>`);}
 function cartPage(){if(catalogMode())return storeShell(empty('Próximamente podrás comprar','Estamos preparando la tienda. Descubre nuestro catálogo.')+'<a class="btn" href="#store">Ver productos</a>');return storeShell(`<div class="page-title"><div><span class="eyebrow">Tu selección</span><h1>Mi carrito</h1><p>Revisa tus productos y continúa con el envío.</p></div><a class="btn" href="#store">Seguir comprando</a></div>${!state.user?empty('Inicia sesión para acceder a tu carrito','Crea una cuenta o inicia sesión para empezar tu compra.')+ '<button class="btn primary" data-action="login">Acceder a mi cuenta</button>':!state.cart.items.length?empty('Tu carrito está vacío','Explora la tienda y añade tus productos favoritos.'):`<div class="cart-layout"><div class="panel">${state.cart.items.map(p=>`<div class="cart-row"><span class="cart-icon ${colorClass(p.color)}">${escape(p.icon)}</span><div><h3>${escape(p.name)}</h3><p class="muted">${money(p.price)} por unidad</p><div class="quantity"><button data-action="quantity" data-id="${p.id}" data-delta="-1" aria-label="Reducir cantidad">−</button><span>${p.quantity}</span><button data-action="quantity" data-id="${p.id}" data-delta="1" aria-label="Aumentar cantidad">+</button><button data-action="remove" data-id="${p.id}" aria-label="Eliminar producto">×</button></div></div><strong class="price">${money(p.price*p.quantity)}</strong></div>`).join('')}</div><aside class="summary"><h2>Resumen de la compra</h2><div class="sum-row"><span>Productos</span><span>${money(state.cart.subtotal)}</span></div><div class="sum-row"><span>Envío</span><span>Calculado al finalizar la compra</span></div><div class="sum-row total"><span>Subtotal</span><span>${money(state.cart.subtotal)}</span></div><button class="btn primary" data-action="checkout">Continuar con el envío →</button><p class="form-help">Las existencias se reservarán al confirmar el pedido.</p></aside></div>`}`);}
@@ -246,7 +251,7 @@ function productsPage(products,stock=false){return adminShell(stock?'stock':'pro
 function financePage(ledger,data){const income=ledger.filter(l=>l.type==='income').reduce((s,l)=>s+l.amount,0),refunds=ledger.filter(l=>l.type==='refund').reduce((s,l)=>s+l.amount,0),expenses=ledger.filter(l=>l.type==='expense').reduce((s,l)=>s+l.amount,0);return adminShell('finance',`${title('Finanzas','Cobros confirmados, gastos y reembolsos.','<button class="btn primary" data-action="expense">+ Registrar gasto</button>')}<div class="metrics">${[['Saldo neto',money(data.metrics.net_revenue),'Total de todo el historial'],['Cobros',money(income),'Últimos 500 movimientos'],['Reembolsos',money(-refunds),'Últimos 500 movimientos'],['Gastos',money(-expenses),'Últimos 500 movimientos']].map(([a,b,c])=>`<article class="metric"><div class="label">${a}</div><strong>${b}</strong><p>${c}</p></article>`).join('')}</div><div class="note">Los ingresos netos son el saldo de los cobros, reembolsos y gastos registrados. Las comisiones de la pasarela y los costes de envío deben registrarse como gastos. Este panel no calcula el beneficio contable.</div><section class="panel"><div class="panel-title"><h2>Movimientos</h2><button class="btn small" data-action="export-finance">Exportar CSV ↓</button></div>${ledger.length?`<div class="table-wrap"><table><thead><tr><th>Fecha</th><th>Descripción</th><th>Tipo</th><th>Importe</th></tr></thead><tbody>${ledger.map(l=>`<tr><td>${date(l.created_at)}</td><td>${escape(l.description)}</td><td>${escape(ledgerTypes[l.type]||l.type)}</td><td class="${l.amount>0?'ledger-positive':'ledger-negative'}"><strong>${money(l.amount)}</strong></td></tr>`).join('')}</tbody></table></div>`:empty('Todavía no hay movimientos')}</section>`);}
 function usersPage(users){return adminShell('users',`${title('Usuarios y accesos','Cada persona tiene los permisos necesarios para su función.','<button class="btn primary" data-action="new-user">+ Nuevo usuario</button>')}<section class="panel"><div class="table-wrap"><table><thead><tr><th>Nombre</th><th>Correo electrónico</th><th>Perfil</th><th>Estado</th><th></th></tr></thead><tbody>${users.map(u=>`<tr><td><strong>${escape(u.name)}</strong></td><td>${escape(u.email)}</td><td>${roleNames[u.role]}</td><td>${u.active?'<span class="badge approved">Activo</span>':'<span class="badge cancelled">Bloqueado</span>'}</td><td>${u.id!==state.user.id?`<button class="btn small" data-action="edit-user" data-id="${u.id}">Permisos</button>`:'<span class="muted">Tu acceso</span>'}</td></tr>`).join('')}</tbody></table></div></section>`);}
 let renderVersion=0;
-async function render(){const version=++renderVersion;let page=location.hash.slice(1)||'store';if(page==='catalog')page='store';const needsLogin=!state.user&&navItems.some(([id])=>id===page);if(needsLogin)page='store';try{
+async function render({scrollToCatalog=false}={}){const version=++renderVersion;let page=location.hash.slice(1)||'store';if(page==='catalog')page='store';const needsLogin=!state.user&&navItems.some(([id])=>id===page);if(needsLogin)page='store';try{
   let html;
   if(page.startsWith('reset-password/')){html=storeShell('<div class="password-page"><h1>Crea una nueva contraseña</h1><p class="muted">El enlace es temporal y solo se puede utilizar una vez.</p><form id="reset-form" data-token="'+escape(page.split('/')[1])+'">'+field('password','Nueva contraseña','','password','required minlength="12" maxlength="128" autocomplete="new-password"')+'<button class="btn primary" type="submit">Guardar nueva contraseña</button></form></div>');}
   else if(['store','cart','orders'].includes(page)) {
@@ -268,7 +273,7 @@ async function render(){const version=++renderVersion;let page=location.hash.sli
   }
   if(version!==renderVersion)return;teardownCampaignMotion();teardownStoreHeader();$('#app').innerHTML=html;teardownStoreHeader=bindStoreHeader();teardownCampaignMotion=bindCampaignMotion();if(needsLogin)authDialog();
   if(page==='stock'){const rows=await api('/admin/movements');if(version!==renderVersion)return;$('#movements').innerHTML=rows.length?`<div class="table-wrap"><table><thead><tr><th>Producto</th><th>Variación</th><th>Motivo</th><th>Responsable</th><th>Fecha</th></tr></thead><tbody>${rows.map(r=>`<tr><td>${escape(r.product_name)}</td><td>${r.quantity>0?'+':''}${r.quantity}</td><td>${escape(r.reason)}</td><td>${escape(r.actor_name||'Sistema')}</td><td>${date(r.created_at)}</td></tr>`).join('')}</tbody></table></div>`:empty('No hay movimientos');}
-  if(location.hash==='#catalog')$('#catalog')?.scrollIntoView({behavior:'smooth'});
+  if(scrollToCatalog&&location.hash==='#catalog')$('#catalog')?.scrollIntoView({behavior:'smooth'});
 }catch(e){toast(e.message,true);if(!$('#app').children.length)$('#app').innerHTML=empty('No se ha podido cargar','Actualiza la página para volver a intentarlo.');}}
 function authDialog(register=false){dialog(register?'Crea tu cuenta':'Te damos la bienvenida',`<p class="muted">${register?'Regístrate para comprar y consultar tus pedidos.':'Inicia sesión para acceder a tu tienda y tus pedidos.'}</p><form id="auth-form" data-register="${register}">${register?field('name','Nombre completo','','text','required minlength="2" autocomplete="name"'):''}${field('email','Correo electrónico','','email','required autocomplete="email"')}${field('password','Contraseña','','password',`required ${register?'minlength="12"':''} maxlength="128" autocomplete="${register?'new-password':'current-password'}"`)}${register?'<p class="form-help">Utiliza una contraseña exclusiva de al menos 12 caracteres.</p>':''}<div class="form-actions"><button class="btn primary" type="submit">${register?'Crear cuenta':'Iniciar sesión'}</button></div></form>${!register?'<div class="switch-auth"><button data-action="forgot">He olvidado mi contraseña</button></div>':''}<div class="switch-auth">${register?'¿Ya tienes cuenta?':'¿Todavía no tienes cuenta?'}<button data-action="${register?'login':'register'}">${register?'Iniciar sesión':'Crear mi cuenta'}</button></div>`);}
 function accountDialog(){dialog('Mi cuenta',`<h3>${escape(state.user.name)}</h3><p class="muted">${escape(state.user.email)} · ${roleNames[state.user.role]}</p><div class="stack form-actions">${has('dashboard')?'<a class="btn" href="#admin" data-action="close">Acceder a la gestión</a>':''}<button class="btn" data-action="password">Cambiar contraseña</button><button class="btn danger" data-action="logout">Cerrar sesión</button></div>`);}
@@ -374,7 +379,7 @@ document.addEventListener('submit',async e=>{e.preventDefault();const form=e.tar
   if(['label-form','label-buy-form'].includes(form.id))await afterOrderAction(await api(`/admin/orders/${form.dataset.id}/label`,{method:'POST',body:{action:form.id==='label-form'?'create':'buy',...data}}),true);
   if(form.id==='password-form'){await api('/auth/password',{method:'POST',body:data});state.user=null;state.csrf=null;state.cart={items:[],subtotal:0};location.hash='store';authDialog();await render();toast('Contraseña actualizada. Vuelve a iniciar sesión.');}
 }catch(error){toast(error.message,true);}finally{if(btn)btn.disabled=false;}});
-window.addEventListener('hashchange',()=>{if(location.hash!=='#catalog')closeDialog();render();});
+window.addEventListener('hashchange',()=>{if(location.hash!=='#catalog')closeDialog();render({scrollToCatalog:location.hash==='#catalog'});});
 $('#dialog').addEventListener('click',e=>{if(e.target===$('#dialog')){const rect=e.target.getBoundingClientRect();if(e.clientX<rect.left||e.clientX>rect.right||e.clientY<rect.top||e.clientY>rect.bottom)closeDialog();}});
 (async()=>{try{state.config=await api('/config');const auth=await api('/auth/me');state.user=auth.user;state.csrf=auth.csrf;await render();}catch(e){$('#app').innerHTML=empty('No se ha podido iniciar la tienda',e.message);}})();
 function photoPreview(){return(state.editPhotoIds||[]).map((id,index)=>`<div class="photo-thumb"><img src="/media/${id}.jpg" alt="Foto ${index+1}"><button type="button" data-action="remove-photo" data-index="${index}" aria-label="Eliminar foto ${index+1}">×</button></div>`).join('');}
