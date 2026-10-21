@@ -32,11 +32,17 @@ async function expectPlaying(video,source){
 
 async function expectLoopRepeats(video){
   let previous=await video.evaluate(media=>media.currentTime);
+  let awaitingProgress=false,completed=0;
   await expect.poll(async()=>{
-    const state=await video.evaluate(media=>({time:media.currentTime,paused:media.paused,error:media.error?.code}));
-    const repeated=!state.paused&&!state.error&&state.time<previous-1;
-    previous=state.time;return repeated;
-  },{timeout:10000,intervals:[250]}).toBe(true);
+    const state=await video.evaluate(media=>({time:media.currentTime,duration:media.duration,paused:media.paused,seeking:media.seeking,error:media.error?.code}));
+    if(state.time<previous-1&&previous>=state.duration-1)awaitingProgress=true;
+    // Reaching zero alone can hide a stalled seek. Require playback to advance
+    // after each of two natural wraps before accepting continuous playback.
+    if(awaitingProgress&&!state.paused&&!state.seeking&&!state.error&&state.time>1){
+      completed++;awaitingProgress=false;
+    }
+    previous=state.time;return completed;
+  },{timeout:20000,intervals:[250]}).toBeGreaterThanOrEqual(2);
 }
 
 async function expectNoPlaybackControls({hero,play}){
@@ -93,7 +99,7 @@ test('la intro termina antes de mostrar la colección y activar el loop sin cont
     await expect(hero.getByText('ORIGINAL . BARCELONA',{exact:true})).toBeVisible();
     await expect(hero.getByText('EDG / Skateboards',{exact:true})).toHaveCount(0);
     await expectPlaying(video,LOOP);
-    await expect(video).toHaveJSProperty('loop',true);
+    await expect(video).toHaveJSProperty('loop',false);
     await expectLoopRepeats(video);
 
     const events=await page.evaluate(()=>window.heroMediaEvents);
