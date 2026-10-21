@@ -4,6 +4,8 @@ const INTRO='/edg-intro-mobile.mp4';
 const LOOP='/edg-logo-tremor-loop.mp4';
 const INTRO_IMAGE='/edg-intro-mobile-animated.webp';
 const LOOP_IMAGE='/edg-logo-tremor-mobile-animated.webp';
+const INTRO_DURATION=3.4;
+const INTRO_LAST_FRAME=INTRO_DURATION-1/30;
 
 test.use({viewport:{width:390,height:844},isMobile:true,hasTouch:true});
 
@@ -69,15 +71,38 @@ async function expectStaticHero({video,poster,description,collection}){
   await expect(video).toHaveCSS('opacity','0');
 }
 
-async function observeMediaEvents(page){
-  await page.addInitScript(()=>{
-    window.heroMediaEvents=[];
+async function observeMediaEvents(page,{blockIntroEnded=false}={}){
+  await page.addInitScript(({intro,blockIntroEnded})=>{
+    window.heroMediaEvents=[];window.heroMediaFrames=[];window.heroReveals=[];
+    const observed=new WeakSet(),revealed=new WeakSet();
+    const observeFrames=media=>{
+      if(observed.has(media)||typeof media.requestVideoFrameCallback!=='function')return;
+      observed.add(media);
+      const onFrame=(now,metadata)=>{
+        if(!media.isConnected||media.dataset.activeSrc!==intro)return;
+        window.heroMediaFrames.push({source:media.dataset.activeSrc,currentSrc:media.currentSrc,at:now,mediaTime:metadata.mediaTime,presentedFrames:metadata.presentedFrames,expectedDisplayTime:metadata.expectedDisplayTime});
+        media.requestVideoFrameCallback(onFrame);
+      };
+      media.requestVideoFrameCallback(onFrame);
+    };
     for(const type of ['playing','ended','waiting'])document.addEventListener(type,event=>{
       const media=event.target;
       if(!(media instanceof HTMLVideoElement)||media.id!=='campaign-video')return;
-      window.heroMediaEvents.push({type,source:media.dataset.activeSrc,currentSrc:media.currentSrc,currentTime:media.currentTime,at:performance.now(),trusted:event.isTrusted});
+      const blocked=blockIntroEnded&&type==='ended'&&media.dataset.activeSrc===intro;
+      window.heroMediaEvents.push({type,source:media.dataset.activeSrc,currentSrc:media.currentSrc,currentTime:media.currentTime,at:performance.now(),trusted:event.isTrusted,blocked});
+      if(type==='playing'&&media.dataset.activeSrc===intro)observeFrames(media);
+      // Keep the real decoder and frames, but prevent the app from receiving
+      // native intro completion. A backend that omits ended has the same state.
+      if(blocked)event.stopImmediatePropagation();
     },true);
-  });
+    new MutationObserver(()=>{
+      const campaign=document.querySelector('.campaign.is-ready');
+      if(!campaign||revealed.has(campaign))return;
+      revealed.add(campaign);
+      const collection=campaign.querySelector('.campaign-cta');
+      window.heroReveals.push({at:performance.now(),collectionVisible:!!collection&&getComputedStyle(collection).visibility==='visible'});
+    }).observe(document,{subtree:true,childList:true,attributes:true,attributeFilter:['class']});
+  },{intro:INTRO,blockIntroEnded});
 }
 
 test('la intro termina antes de mostrar la colección y activar el loop sin controles ni repetirse al volver',async({page})=>{
@@ -102,7 +127,10 @@ test('la intro termina antes de mostrar la colección y activar el loop sin cont
     await expectPlaying(video,INTRO);
     await expect(description).toBeHidden();
     await expect(collection).toBeHidden();
-    await expect.poll(()=>page.evaluate(source=>window.heroMediaEvents.some(event=>event.type==='ended'&&event.source===source&&event.trusted),INTRO),{timeout:10000}).toBe(true);
+    await expect.poll(()=>page.evaluate(({source,lastFrame,duration})=>
+      window.heroMediaEvents.some(event=>event.type==='ended'&&event.source===source&&event.trusted&&event.currentTime>=duration-.001)
+      ||window.heroMediaFrames.some(frame=>frame.source===source&&frame.mediaTime>=lastFrame-.001),
+    {source:INTRO,lastFrame:INTRO_LAST_FRAME,duration:INTRO_DURATION}),{timeout:10000}).toBe(true);
     await expect(description).toBeVisible();
     await expect(collection).toBeVisible();
     await expect(hero.getByText('ORIGINAL . BARCELONA',{exact:true})).toBeVisible();
@@ -111,13 +139,21 @@ test('la intro termina antes de mostrar la colección y activar el loop sin cont
     await expect(video).toHaveJSProperty('loop',false);
     await expectLoopRepeats(video);
 
-    const events=await page.evaluate(()=>window.heroMediaEvents);
+    const {events,frames,reveals}=await page.evaluate(()=>({events:window.heroMediaEvents,frames:window.heroMediaFrames,reveals:window.heroReveals}));
     const introPlaying=events.findIndex(event=>event.type==='playing'&&event.source===INTRO);
-    const introEnded=events.findIndex(event=>event.type==='ended'&&event.source===INTRO&&event.trusted);
+    const introEnded=events.find(event=>event.type==='ended'&&event.source===INTRO&&event.trusted&&event.currentTime>=INTRO_DURATION-.001);
+    const finalFrame=frames.find(frame=>frame.source===INTRO&&frame.mediaTime>=INTRO_LAST_FRAME-.001);
     const loopPlaying=events.findIndex(event=>event.type==='playing'&&event.source===LOOP);
     expect(introPlaying).toBeGreaterThanOrEqual(0);
-    expect(introEnded).toBeGreaterThan(introPlaying);
-    expect(loopPlaying).toBeGreaterThan(introEnded);
+    expect(Boolean(introEnded||finalFrame),'The complete intro must end natively or present its actual final frame').toBe(true);
+    const completedAt=introEnded?.at??finalFrame.expectedDisplayTime;
+    expect(completedAt).toBeGreaterThan(events[introPlaying].at);
+    expect(loopPlaying).toBeGreaterThan(introPlaying);
+    expect(events[loopPlaying].at).toBeGreaterThanOrEqual(completedAt);
+    expect(events[loopPlaying].at-completedAt,'The loop must not wait for the 8-second watchdog').toBeLessThan(1000);
+    expect(reveals[0].at).toBeGreaterThanOrEqual(completedAt);
+    expect(reveals[0].at-completedAt).toBeLessThan(1000);
+    expect(reveals[0].collectionVisible).toBe(true);
 
     const introRequestCount=requests.filter(path=>path===INTRO).length;
     const introPlayCount=events.filter(event=>event.type==='playing'&&event.source===INTRO).length;
@@ -136,6 +172,37 @@ test('la intro termina antes de mostrar la colección y activar el loop sin cont
   }finally{
     releaseIntro();
   }
+});
+
+test('el último cuadro real completa la intro aunque ended no llegue al reproductor',async({page})=>{
+  const requests=mediaRequests(page),errors=[];
+  page.on('pageerror',error=>errors.push(error.message));
+  await observeMediaEvents(page,{blockIntroEnded:true});
+  await page.goto('/',{waitUntil:'domcontentloaded'});
+  const elements=heroElements(page),{video,description,collection}=elements;
+  await expectPlaying(video,INTRO);
+  await expect(description).toBeHidden();
+  await expect(collection).toBeHidden();
+  await expect.poll(()=>page.evaluate(({source,lastFrame})=>window.heroMediaFrames.some(frame=>frame.source===source&&frame.mediaTime>=lastFrame-.001),{source:INTRO,lastFrame:INTRO_LAST_FRAME}),{timeout:10000}).toBe(true);
+  await expectPlaying(video,LOOP);
+  await expect(description).toBeVisible();
+  await expect(collection).toBeVisible();
+  await expectNoPlaybackControls(elements);
+
+  const {events,frames,reveals}=await page.evaluate(()=>({events:window.heroMediaEvents,frames:window.heroMediaFrames,reveals:window.heroReveals}));
+  const finalFrame=frames.find(frame=>frame.source===INTRO&&frame.mediaTime>=INTRO_LAST_FRAME-.001);
+  const loopPlaying=events.find(event=>event.type==='playing'&&event.source===LOOP);
+  expect(finalFrame.currentSrc).toMatch(/^blob:/);
+  expect(finalFrame.mediaTime).toBeCloseTo(INTRO_LAST_FRAME,3);
+  expect(finalFrame.presentedFrames).toBeGreaterThan(1);
+  expect(events.filter(event=>event.type==='ended'&&event.source===INTRO).every(event=>event.trusted&&event.blocked)).toBe(true);
+  expect(loopPlaying.at).toBeGreaterThan(finalFrame.expectedDisplayTime);
+  expect(loopPlaying.at-finalFrame.expectedDisplayTime,'The loop must start within 1 second of the decoded final frame').toBeLessThan(1000);
+  expect(reveals[0].at).toBeGreaterThan(finalFrame.expectedDisplayTime);
+  expect(reveals[0].at-finalFrame.expectedDisplayTime,'The CTA must appear within 1 second of the decoded final frame').toBeLessThan(1000);
+  expect(reveals[0].collectionVisible).toBe(true);
+  expect(requests.filter(path=>path.endsWith('-animated.webp'))).toEqual([]);
+  expect(errors).toEqual([]);
 });
 
 test('la campaña y el carrusel arrancan automáticamente sin un control de activación',async({page})=>{
