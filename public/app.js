@@ -25,6 +25,61 @@ function closeDialog(){ $('#dialog').close(); }
 const catalogMode=()=>state.config?.mode==='catalog';
 const demoBanner=()=>catalogMode()?'<div class="demo">TIENDA EN PREPARACIÓN · Descubre los productos. Próximamente podrás comprar.</div>':state.config.mode==='demo'?'<div class="demo">ENTORNO DE DEMOSTRACIÓN · Pagos y envíos simulados, sin cargos reales.</div>':'';
 const brand=()=>`<a class="brand" href="#store"><span class="brand-logo"><img src="/edg-logo.png" alt="EDG"></span></a>`;
+let teardownCampaignMotion=()=>{};
+let campaignMotionPaused=false;
+function campaignHero(){
+  return `<section class="campaign" aria-labelledby="campaign-title">
+    <span class="eyebrow">EDG / Skateboards</span><h1 id="campaign-title" class="sr-only">EDG Skateboards</h1>
+    <div class="campaign-body"><div class="campaign-media">
+      <img class="campaign-poster" src="/edg-logo-tremor-poster.png" width="848" height="480" alt="" fetchpriority="high" decoding="async">
+      <video id="campaign-video" class="campaign-video" width="848" height="480" data-src="/edg-logo-tremor-loop.mp4" poster="/edg-logo-tremor-poster.png" muted loop playsinline preload="none" aria-hidden="true"></video>
+    </div><p class="campaign-description">Skateboarding y cultura urbana.</p><a class="btn campaign-cta" href="#catalog">Explorar la colección <span aria-hidden="true">↗</span></a></div>
+    <div class="campaign-footer"><span class="campaign-caption">ORIGINAL . BARCELONA</span><button id="campaign-motion-toggle" class="campaign-motion-toggle" type="button" aria-controls="campaign-video" hidden><span class="campaign-motion-label">Reproducir animación</span><span class="campaign-motion-icon" aria-hidden="true">↻</span></button></div>
+  </section>`;
+}
+function bindCampaignMotion(){
+  const video=$('#campaign-video'),button=$('#campaign-motion-toggle');
+  if(!video||!button)return ()=>{};
+  const campaign=video.closest('.campaign'),preference=window.matchMedia('(prefers-reduced-motion: reduce)');
+  const controller=new AbortController(),options={signal:controller.signal};
+  let visible=false,manualMotion=false,disposed=false,failed=false;
+  video.muted=true;
+  button.hidden=false;
+  const shouldPlay=()=>!disposed&&!failed&&visible&&!document.hidden&&!campaignMotionPaused&&(!preference.matches||manualMotion);
+  const updateControl=()=>{
+    if(disposed)return;
+    button.querySelector('.campaign-motion-label').textContent=video.paused?'Reproducir animación':'Pausar animación';
+    button.querySelector('.campaign-motion-icon').textContent=video.paused?'↻':'Ⅱ';
+  };
+  const updatePlayback=()=>{
+    if(!shouldPlay()){video.pause();updateControl();return;}
+    if(!video.getAttribute('src'))video.src=video.dataset.src;
+    if(video.paused)video.play().then(()=>{if(!shouldPlay())video.pause();}).catch(updateControl);
+  };
+  button.addEventListener('click',()=>{
+    campaignMotionPaused=!video.paused;
+    if(!campaignMotionPaused)manualMotion=true;
+    updatePlayback();
+  },options);
+  video.addEventListener('play',updateControl,options);
+  video.addEventListener('pause',updateControl,options);
+  video.addEventListener('playing',()=>{campaign.classList.add('has-video');updateControl();},options);
+  video.addEventListener('error',()=>{
+    failed=true;video.pause();campaign.classList.remove('has-video');button.hidden=true;
+  },options);
+  preference.addEventListener('change',()=>{
+    manualMotion=false;
+    if(preference.matches)campaign.classList.remove('has-video');
+    updatePlayback();
+  },options);
+  document.addEventListener('visibilitychange',updatePlayback,options);
+  const observer=new IntersectionObserver(entries=>{visible=entries[0].isIntersecting;updatePlayback();});
+  observer.observe(campaign);
+  return ()=>{
+    disposed=true;observer.disconnect();controller.abort();video.pause();
+    if(video.getAttribute('src')){video.removeAttribute('src');video.load();}
+  };
+}
 function storeShell(content) {
   const count=state.cart.items.reduce((s,p)=>s+p.quantity,0);
   return `${demoBanner()}<header class="topbar">${brand()}<nav class="toplinks"><a href="#store">Inicio</a><a href="#catalog">Colección</a><a href="#orders">Mis pedidos</a>${has('dashboard')?'<a href="#admin">Gestión</a>':''}</nav><div class="topactions">${state.user?`<button class="btn small" data-action="account">${escape(state.user.name.split(' ')[0])} · Mi cuenta</button>`:'<button class="btn small" data-action="login">Iniciar sesión</button>'}<a class="btn small" href="#cart">Carrito <span class="cart-count">${count}</span></a></div></header><main class="store-main">${content}<footer class="footer"><span>© ${new Date().getFullYear()} EDG</span><nav aria-label="Enlaces del pie de página"><a href="#catalog">Colección</a><a href="#orders">Mis pedidos</a><a href="#cart">Carrito</a></nav><a class="footer-brand" href="#store"><img class="sr-only" src="/edg-footer-logo.png" alt="EDG" width="1122" height="125" loading="lazy" decoding="async"></a></footer></main>`;
@@ -53,7 +108,7 @@ function deckCarousel(){
   const group=duplicate=>`<div class="deck-carousel-group" ${duplicate?'aria-hidden="true"':''}>${shuffledDeckDesigns.map(([id,label])=>`<img src="/shape-${id}.webp" alt="${duplicate?'':escape(`Tabla EDG · ${label}`)}" width="1200" height="300" loading="lazy" decoding="async">`).join('')}</div>`;
   return `<section class="deck-carousel" aria-label="Diseños de tablas EDG"><div class="deck-carousel-window"><div class="deck-carousel-track">${group(false)}${group(true)}</div></div></section>`;
 }
-function storePage(){return storeShell(`<section class="campaign"><div class="campaign-copy"><span class="eyebrow">EDG / Skateboards</span><h1>Way To live</h1><p>LoveMyLifEDG</p><a class="btn primary" href="#catalog">Explorar la colección ↗</a><span class="campaign-caption">ORIGINAL . BARCELONA</span></div><div class="campaign-art"><img class="campaign-emblem" src="/edg-hero-emblem-black.png" width="1254" height="1254" alt="HIP HOP — SKATEBOARDING CULTURE. Emblema negro con un globo terráqueo." fetchpriority="high" decoding="async"></div></section>${deckCarousel()}<section id="catalog" class="collection-section"><div class="section-head"><div><span class="eyebrow">Descubre / La selección EDG</span><h2>LA COLECCIÓN.</h2></div><span class="collection-count">${state.products.length} productos</span></div><div class="filters">${['Todos',...new Set(state.products.map(p=>p.category))].map(c=>`<button class="filter ${state.category===c?'active':''}" data-action="filter" data-category="${escape(c)}">${escape(c)}</button>`).join('')}<label class="search"><span class="sr-only">Buscar productos</span><input id="product-search" placeholder="Buscar en la colección…" value="${escape(state.search)}"></label></div><div class="product-grid" id="product-grid">${productCards()}</div></section><section class="category-section"><div class="section-head"><h2>DESCUBRE MÁS.</h2><a href="#catalog">Ver todo ↗</a></div><div class="category-grid">${categoryCards()}</div></section><section class="brand-statement"><span class="eyebrow">El universo EDG</span><h2>MÁS IDENTIDAD.<br>MENOS DE LO MISMO.</h2><a class="btn" href="#catalog">Encuentra tu próxima elección ↗</a></section>`);}
+function storePage(){return storeShell(`${campaignHero()}${deckCarousel()}<section id="catalog" class="collection-section"><div class="section-head"><div><span class="eyebrow">Descubre / La selección EDG</span><h2>LA COLECCIÓN.</h2></div><span class="collection-count">${state.products.length} productos</span></div><div class="filters">${['Todos',...new Set(state.products.map(p=>p.category))].map(c=>`<button class="filter ${state.category===c?'active':''}" data-action="filter" data-category="${escape(c)}">${escape(c)}</button>`).join('')}<label class="search"><span class="sr-only">Buscar productos</span><input id="product-search" placeholder="Buscar en la colección…" value="${escape(state.search)}"></label></div><div class="product-grid" id="product-grid">${productCards()}</div></section><section class="category-section"><div class="section-head"><h2>DESCUBRE MÁS.</h2><a href="#catalog">Ver todo ↗</a></div><div class="category-grid">${categoryCards()}</div></section><section class="brand-statement"><span class="eyebrow">El universo EDG</span><h2>MÁS IDENTIDAD.<br>MENOS DE LO MISMO.</h2><a class="btn" href="#catalog">Encuentra tu próxima elección ↗</a></section>`);}
 function cartPage(){if(catalogMode())return storeShell(empty('Próximamente podrás comprar','Estamos preparando la tienda. Descubre nuestro catálogo.')+'<a class="btn" href="#store">Ver productos</a>');return storeShell(`<div class="page-title"><div><span class="eyebrow">Tu selección</span><h1>Mi carrito</h1><p>Revisa tus productos y continúa con el envío.</p></div><a class="btn" href="#store">Seguir comprando</a></div>${!state.user?empty('Inicia sesión para acceder a tu carrito','Crea una cuenta o inicia sesión para empezar tu compra.')+ '<button class="btn primary" data-action="login">Acceder a mi cuenta</button>':!state.cart.items.length?empty('Tu carrito está vacío','Explora la tienda y añade tus productos favoritos.'):`<div class="cart-layout"><div class="panel">${state.cart.items.map(p=>`<div class="cart-row"><span class="cart-icon ${colorClass(p.color)}">${escape(p.icon)}</span><div><h3>${escape(p.name)}</h3><p class="muted">${money(p.price)} por unidad</p><div class="quantity"><button data-action="quantity" data-id="${p.id}" data-delta="-1" aria-label="Reducir cantidad">−</button><span>${p.quantity}</span><button data-action="quantity" data-id="${p.id}" data-delta="1" aria-label="Aumentar cantidad">+</button><button data-action="remove" data-id="${p.id}" aria-label="Eliminar producto">×</button></div></div><strong class="price">${money(p.price*p.quantity)}</strong></div>`).join('')}</div><aside class="summary"><h2>Resumen de la compra</h2><div class="sum-row"><span>Productos</span><span>${money(state.cart.subtotal)}</span></div><div class="sum-row"><span>Envío</span><span>Calculado al finalizar la compra</span></div><div class="sum-row total"><span>Subtotal</span><span>${money(state.cart.subtotal)}</span></div><button class="btn primary" data-action="checkout">Continuar con el envío →</button><p class="form-help">Las existencias se reservarán al confirmar el pedido.</p></aside></div>`}`);}
 function ordersPage(orders){return storeShell(`<div class="page-title"><div><span class="eyebrow">Todo bajo control</span><h1>Mis pedidos</h1><p>Consulta el pago, la preparación y la entrega.</p></div><a class="btn" href="#store">Ir a la tienda</a></div>${!state.user?empty('Inicia sesión para ver tus pedidos')+'<button class="btn primary" data-action="login">Iniciar sesión</button>':!orders.length?empty('Todavía no tienes pedidos','Tus próximas compras aparecerán aquí.'):`<div class="order-cards">${orders.map(o=>`<article class="order-card"><div class="order-meta"><h3>Pedido #${o.number}</h3><p>${date(o.created_at)} · ${o.items.reduce((s,p)=>s+p.quantity,0)} artículo(s)</p></div>${badge(o.status)}<strong>${money(o.total)}</strong><button class="btn small" data-action="order" data-id="${o.id}">Ver pedido ↗</button></article>`).join('')}</div>`}`);}
 const europeCountryNames={ES:'España (Península y Baleares)',DE:'Alemania',IT:'Italia',PT:'Portugal'};
@@ -120,7 +175,7 @@ async function render(){const version=++renderVersion;let page=location.hash.sli
     if(page==='users'){state.users=await api('/admin/users');html=usersPage(state.users);}
     if(page==='audit'){const logs=await api('/admin/audit');html=adminShell(page,`${title('Actividad','Historial de los cambios realizados por el equipo.')}<section class="panel"><div class="table-wrap"><table><thead><tr><th>Fecha</th><th>Usuario</th><th>Acción</th><th>Referencia</th></tr></thead><tbody>${logs.map(l=>`<tr><td>${date(l.created_at)}</td><td>${escape(l.actor_name||'Sistema')}</td><td>${escape(auditActions[l.action]||l.action)}</td><td>${escape(l.entity_id||'—')}</td></tr>`).join('')}</tbody></table></div></section>`);}
   }
-  if(version!==renderVersion)return;$('#app').innerHTML=html;if(needsLogin)authDialog();
+  if(version!==renderVersion)return;teardownCampaignMotion();$('#app').innerHTML=html;teardownCampaignMotion=bindCampaignMotion();if(needsLogin)authDialog();
   if(page==='stock'){const rows=await api('/admin/movements');if(version!==renderVersion)return;$('#movements').innerHTML=rows.length?`<div class="table-wrap"><table><thead><tr><th>Producto</th><th>Variación</th><th>Motivo</th><th>Responsable</th><th>Fecha</th></tr></thead><tbody>${rows.map(r=>`<tr><td>${escape(r.product_name)}</td><td>${r.quantity>0?'+':''}${r.quantity}</td><td>${escape(r.reason)}</td><td>${escape(r.actor_name||'Sistema')}</td><td>${date(r.created_at)}</td></tr>`).join('')}</tbody></table></div>`:empty('No hay movimientos');}
   if(location.hash==='#catalog')$('#catalog')?.scrollIntoView({behavior:'smooth'});
 }catch(e){toast(e.message,true);if(!$('#app').children.length)$('#app').innerHTML=empty('No se ha podido cargar','Actualiza la página para volver a intentarlo.');}}
