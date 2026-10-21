@@ -230,6 +230,8 @@ export function createApp({db=database(),config=configuration(),provider=provide
       files['/edg-logo-tremor-poster.png']='edg-logo-tremor-poster.png';
       files['/edg-intro.mp4']='edg-intro.mp4';
       files['/edg-intro-poster.jpg']='edg-intro-poster.jpg';
+      files['/edg-intro-animated.webp']='edg-intro-animated.webp';
+      files['/edg-logo-tremor-animated.webp']='edg-logo-tremor-animated.webp';
       const filename=files[url.pathname];requireThat(filename,404,'Página no encontrada.');
       const content=await readFile(new URL(`../public/${filename}`,import.meta.url));
       if(campaignVideoPaths.has(url.pathname)){
