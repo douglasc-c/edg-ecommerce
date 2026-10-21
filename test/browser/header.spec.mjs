@@ -20,41 +20,82 @@ async function headerGeometry(header){
   });
 }
 
-async function scrollHeader(page,target,hidden,baseline){
+async function scrollHeader(page,target,hidden,baseline,{inspectMotion=false}={}){
   // Observe actual rendered positions. Waiting for scroll alone can finish
   // while the header's transform is still transitioning.
-  const motion=await page.evaluate(({target,hidden})=>new Promise(resolve=>{
+  const motion=await page.evaluate(({target,hidden,inspectMotion})=>new Promise(resolve=>{
     const header=document.querySelector('.store-header'),samples=[];
-    const started=performance.now();let settled=0;
+    const read=()=>{
+      const box=header.getBoundingClientRect();
+      return {at:performance.now(),top:box.top,bottom:box.bottom,height:box.height,mainTop:header.nextElementSibling.getBoundingClientRect().top+scrollY,scroll:scrollY,hidden:header.classList.contains('is-scroll-hidden')};
+    };
+    const started=performance.now();let settled=0,inspection=null;
+    // Capture the actual CSS transition in the class-change microtask. A busy
+    // runner can miss its entire 280 ms lifetime between two rAF callbacks.
+    // Seeking this existing animation proves interpolation independently of
+    // that scheduling gap, without changing product styles or their duration.
+    const observer=inspectMotion?new MutationObserver(()=>{
+      if(inspection||header.classList.contains('is-scroll-hidden')!==hidden)return;
+      const animation=header.getAnimations().find(item=>item instanceof CSSTransition&&item.transitionProperty==='transform');
+      inspection={found:!!animation,points:[]};
+      observer.disconnect();
+      if(!animation){inspection.instant=read();return;}
+      const originalTime=animation.currentTime;
+      try{
+        const timing=animation.effect.getTiming();
+        inspection.duration=timing.duration;inspection.property=animation.transitionProperty;
+        inspection.cssTransition=animation instanceof CSSTransition;
+        if(!Number.isFinite(timing.duration)||timing.duration<=0)throw new Error('CSS transform transition has no positive duration');
+        animation.pause();
+        for(const progress of [0,.25,.5,.75,1]){
+          animation.currentTime=timing.delay+timing.duration*progress;
+          inspection.points.push({progress,...read()});
+        }
+      }catch(error){inspection.error=error.message;}
+      finally{animation.currentTime=originalTime??0;animation.play();}
+    }):null;
+    read(); // Establish the before-change style before asking for the scroll.
+    observer?.observe(header,{attributes:true,attributeFilter:['class']});
     window.scrollTo({top:target,behavior:'instant'});
     const sample=()=>{
-      const box=header.getBoundingClientRect();
-      const state={at:performance.now(),top:box.top,bottom:box.bottom,height:box.height,mainTop:header.nextElementSibling.getBoundingClientRect().top+scrollY,scroll:scrollY,hidden:header.classList.contains('is-scroll-hidden')};
+      const state=read();
       samples.push(state);
       const shown=target>=state.mainTop?Math.abs(state.top)<=1:state.top>=-1;
       const complete=state.hidden===hidden&&(hidden?state.bottom<=1:shown)&&Math.abs(state.scroll-target)<=1;
       settled=complete?settled+1:0;
-      if(settled>=3||performance.now()-started>2000)resolve({complete:settled>=3,samples});
+      if(settled>=3||performance.now()-started>2000){observer?.disconnect();resolve({complete:settled>=3,samples,inspection});}
       else requestAnimationFrame(sample);
     };
     requestAnimationFrame(sample);
-  }),{target,hidden});
+  }),{target,hidden,inspectMotion});
   expect(motion.complete,`Header must ${hidden?'hide':'show'} at scroll ${target}; final state: ${JSON.stringify(motion.samples.at(-1))}`).toBe(true);
-  expect(Math.max(...motion.samples.map(state=>Math.abs(state.scroll-target))),'The header must not change the requested scroll position').toBeLessThanOrEqual(1);
-  expect(Math.max(...motion.samples.map(state=>Math.abs(state.height-baseline.height))),'Sliding must preserve the header height').toBeLessThanOrEqual(1);
-  expect(Math.max(...motion.samples.map(state=>Math.abs(state.mainTop-baseline.mainTop))),'Sliding must preserve the main content position in the document').toBeLessThanOrEqual(1);
-  return motion.samples;
+  const positions=[...motion.samples,...(motion.inspection?.points||[])];
+  expect(Math.max(...positions.map(state=>Math.abs(state.scroll-target))),'The header must not change the requested scroll position').toBeLessThanOrEqual(1);
+  expect(Math.max(...positions.map(state=>Math.abs(state.height-baseline.height))),'Sliding must preserve the header height').toBeLessThanOrEqual(1);
+  expect(Math.max(...positions.map(state=>Math.abs(state.mainTop-baseline.mainTop))),'Sliding must preserve the main content position in the document').toBeLessThanOrEqual(1);
+  return motion;
 }
 
-function expectHeaderMotion(samples,{reducedMotion,mobile},hidden){
-  const active=samples.filter(state=>state.hidden===hidden);
-  const intermediate=active.filter(state=>state.top<-1&&state.bottom>1);
+function expectHeaderMotion({samples,inspection},{reducedMotion,mobile},hidden){
+  if(!mobile)return;
+  expect(inspection,'The class change must be observed before its transition can finish').not.toBeNull();
+  expect(inspection.error).toBeUndefined();
   if(reducedMotion==='reduce'){
+    expect(inspection.found,'Reduced motion must not create a transform transition').toBe(false);
+    expect(hidden?inspection.instant.bottom<=1:Math.abs(inspection.instant.top)<=1).toBe(true);
+    const intermediate=samples.filter(state=>state.hidden===hidden&&state.top<-1&&state.bottom>1);
     expect(intermediate,'Reduced motion must switch the header without interpolated positions').toHaveLength(0);
-  }else if(mobile){
-    expect(intermediate.length,'The mobile header must slide through real intermediate positions').toBeGreaterThan(0);
-    for(let index=1;index<active.length;index++){
-      const delta=active[index].top-active[index-1].top;
+  }else{
+    expect(inspection.found,'The mobile header must create a real CSS transform transition').toBe(true);
+    expect(inspection.cssTransition).toBe(true);
+    expect(inspection.property).toBe('transform');
+    expect(inspection.duration).toBeGreaterThan(0);
+    const points=inspection.points,start=points[0],end=points.at(-1),middle=points.find(point=>point.progress===.5);
+    expect(Math.abs(end.top-start.top),'The transition must cover the full header height').toBeGreaterThanOrEqual(start.height-1);
+    expect(middle.top,'Halfway through the real CSS transition must be an intermediate position').toBeGreaterThan(Math.min(start.top,end.top)+.5);
+    expect(middle.top).toBeLessThan(Math.max(start.top,end.top)-.5);
+    for(let index=1;index<points.length;index++){
+      const delta=points[index].top-points[index-1].top;
       expect(hidden?delta:-delta,'The slide must not reverse direction mid-transition').toBeLessThanOrEqual(1);
     }
   }
@@ -104,13 +145,13 @@ for(const scenario of [
     await home.evaluate(link=>link.blur());
 
     await scrollHeader(page,Math.max(1,Math.floor(baseline.mainTop)-2),false,baseline);
-    const hiding=await scrollHeader(page,600,true,baseline);
+    const hiding=await scrollHeader(page,600,true,baseline,{inspectMotion:scenario.mobile});
     expectHeaderMotion(hiding,scenario,true);
     await expect(header).toHaveCSS('background-color','rgb(255, 255, 255)');
     for(const position of [598,601,599,602])await scrollHeader(page,position,true,baseline);
     // Deliberate upward travel accumulates across small scroll events.
     for(const position of [599,596,593])await scrollHeader(page,position,true,baseline);
-    const showing=await scrollHeader(page,590,false,baseline);
+    const showing=await scrollHeader(page,590,false,baseline,{inspectMotion:scenario.mobile});
     expectHeaderMotion(showing,scenario,false);
     for(const position of [592,589,591,588])await scrollHeader(page,position,false,baseline);
     await scrollHeader(page,640,true,baseline);
