@@ -108,7 +108,7 @@ function bindCampaignMotion(){
     const source=introFinished?video.dataset.loopSrc:video.dataset.introSrc;
     if(video.getAttribute('src')!==source){
       campaign.classList.remove('has-video');
-      video.loop=introFinished;video.preload='auto';
+      video.loop=false;video.preload='auto';
       video.poster=introFinished?'/edg-logo-tremor-poster.png':'/edg-intro-poster.jpg';
       video.src=source;
     }
@@ -128,7 +128,13 @@ function bindCampaignMotion(){
       campaign.classList.add('has-video');playButton.hidden=true;
     }else video.pause();
   },options);
-  video.addEventListener('ended',()=>{if(!introFinished)finishIntro();},options);
+  video.addEventListener('ended',()=>{
+    if(!video.ended)return;
+    if(!introFinished)return finishIntro();
+    // Explicit replay avoids native loop seeks that can stall in WebKit media
+    // backends. Keep this element so a prior tap still authorizes playback.
+    video.currentTime=0;updatePlayback();
+  },options);
   video.addEventListener('error',()=>{
     if(!introFinished)finishIntro();
     else blockPlayback();
