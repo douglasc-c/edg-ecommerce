@@ -75,10 +75,34 @@ function bindCampaignMotion(){
   const controller=new AbortController(),options={signal:controller.signal};
   const bufferedVideos=new Map(),nextAnimation=new Image();nextAnimation.decoding='async';
   let visible=false,disposed=false,usingImages=false,imageFailed=false,introImageStarted=false;
-  let introTimeout,imageLoadTimeout,imageGeneration=0,introFinished=campaignIntroComplete;
+  let introTimeout,introFrameCallback,introCompletionTimeout,imageLoadTimeout,imageGeneration=0,introFinished=campaignIntroComplete;
   video.muted=video.defaultMuted=true;video.playsInline=true;
   const shouldPlay=()=>!disposed&&visible&&!document.hidden;
-  const clearIntroTimer=()=>{clearTimeout(introTimeout);introTimeout=undefined;};
+  const clearIntroTimer=()=>{
+    clearTimeout(introTimeout);introTimeout=undefined;
+    clearTimeout(introCompletionTimeout);introCompletionTimeout=undefined;
+    if(introFrameCallback!==undefined){video.cancelVideoFrameCallback(introFrameCallback);introFrameCallback=undefined;}
+  };
+  function watchIntroFrames(){
+    if(!mobile||introFinished||usingImages||!video.requestVideoFrameCallback||introFrameCallback!==undefined||introCompletionTimeout!==undefined)return;
+    const source=video.getAttribute('src');
+    const onFrame=(now,frame)=>{
+      introFrameCallback=undefined;
+      if(!shouldPlay()||introFinished||usingImages||video.getAttribute('src')!==source)return;
+      // The mobile asset is 3.4 s at 30 fps. Some WebKit backends present its
+      // final frame but omit ended or report an incorrect element duration.
+      // Only a presented final-frame PTS can arm this fallback, never a clock
+      // started at play(). Allow its full display time and prefer native ended.
+      if(frame.mediaTime>=3.4-1/30-0.001){
+        const delay=Math.max(0,frame.expectedDisplayTime-now)+Math.max(0,3.4-frame.mediaTime)*1000+150;
+        introCompletionTimeout=setTimeout(()=>{
+          introCompletionTimeout=undefined;
+          if(shouldPlay()&&!introFinished&&!usingImages&&video.getAttribute('src')===source)finishIntro();
+        },delay);
+      }else introFrameCallback=video.requestVideoFrameCallback(onFrame);
+    };
+    introFrameCallback=video.requestVideoFrameCallback(onFrame);
+  }
   function prepareVideo(source){
     if(bufferedVideos.has(source))return bufferedVideos.get(source);
     const request=new AbortController(),entry={request,url:null,failed:false};
@@ -116,7 +140,7 @@ function bindCampaignMotion(){
     if(still)campaign.classList.remove('has-video');
   }
   function finishIntro(){
-    if(disposed)return;
+    if(disposed||introFinished)return;
     introFinished=campaignIntroComplete=true;clearIntroTimer();
     // The final-frame poster covers both video and animated-image source changes.
     showContent({still:true});updatePlayback();
@@ -201,7 +225,7 @@ function bindCampaignMotion(){
   video.addEventListener('playing',()=>{
     if(!usingImages&&shouldPlay()){
       campaign.classList.add('has-video');
-      if(mobile&&!introFinished)prepareVideo(loopSource);
+      if(mobile&&!introFinished){watchIntroFrames();prepareVideo(loopSource);}
     }
     else video.pause();
   },options);
