@@ -59,8 +59,8 @@ function campaignHero(){
     <span class="eyebrow campaign-reveal">ORIGINAL . BARCELONA</span><h1 id="campaign-title" class="sr-only">EDG Skateboards</h1>
     <div class="campaign-body"><div class="campaign-media">
       <img class="campaign-poster" src="/edg-logo-tremor-poster.png" width="848" height="480" alt="" fetchpriority="high" decoding="async">
-      <img class="campaign-animation" width="848" height="480" alt="" decoding="async" data-intro-src="/edg-intro-animated.webp" data-loop-src="/edg-logo-tremor-animated.webp" hidden>
-      <video id="campaign-video" class="campaign-video" width="848" height="480" data-intro-src="/edg-intro.mp4" data-loop-src="/edg-logo-tremor-loop.mp4" poster="/edg-intro-poster.jpg" muted playsinline preload="none" aria-hidden="true"></video>
+      <img class="campaign-animation" width="848" height="480" alt="" decoding="async" data-intro-src="/edg-intro-animated.webp" data-loop-src="/edg-logo-tremor-animated.webp" data-mobile-intro-src="/edg-intro-mobile-animated.webp" data-mobile-loop-src="/edg-logo-tremor-mobile-animated.webp" hidden>
+      <video id="campaign-video" class="campaign-video" width="848" height="480" data-intro-src="/edg-intro.mp4" data-mobile-intro-src="/edg-intro-mobile.mp4" data-loop-src="/edg-logo-tremor-loop.mp4" poster="/edg-intro-poster.jpg" muted playsinline preload="none" aria-hidden="true"></video>
     </div><p class="campaign-description campaign-reveal">Skateboarding y cultura urbana.</p><a class="btn campaign-cta campaign-reveal" href="#catalog">Explorar la colección <span aria-hidden="true">↗</span></a></div>
   </section>`;
 }
@@ -68,13 +68,46 @@ function bindCampaignMotion(){
   const video=$('#campaign-video');
   if(!video)return ()=>{};
   const campaign=video.closest('.campaign'),animation=campaign.querySelector('.campaign-animation');
+  const mobile=window.matchMedia('(max-width:760px), (pointer:coarse)').matches;
+  const introSource=mobile?video.dataset.mobileIntroSrc:video.dataset.introSrc,loopSource=video.dataset.loopSrc;
+  const introImageSource=mobile?animation.dataset.mobileIntroSrc:animation.dataset.introSrc;
+  const loopImageSource=mobile?animation.dataset.mobileLoopSrc:animation.dataset.loopSrc;
   const controller=new AbortController(),options={signal:controller.signal};
+  const bufferedVideos=new Map(),nextAnimation=new Image();nextAnimation.decoding='async';
   let visible=false,disposed=false,usingImages=false,imageFailed=false,introImageStarted=false;
-  let introTimeout,imageLoadTimeout,introFinished=campaignIntroComplete;
+  let introTimeout,imageLoadTimeout,imageGeneration=0,introFinished=campaignIntroComplete;
   video.muted=video.defaultMuted=true;video.playsInline=true;
   const shouldPlay=()=>!disposed&&visible&&!document.hidden;
   const clearIntroTimer=()=>{clearTimeout(introTimeout);introTimeout=undefined;};
+  function prepareVideo(source){
+    if(bufferedVideos.has(source))return bufferedVideos.get(source);
+    const request=new AbortController(),entry={request,url:null,failed:false};
+    bufferedVideos.set(source,entry);
+    entry.timeout=setTimeout(()=>request.abort(),12000);
+    // These short mobile clips must be completely downloaded before playback.
+    // preload/canplaythrough are hints and can still allow mid-intro buffering.
+    fetch(source,{signal:request.signal,priority:source===introSource?'high':'low'}).then(response=>{
+      if(!response.ok)throw new Error('Campaign video unavailable');
+      return response.blob();
+    }).then(blob=>{
+      if(disposed||usingImages)return;
+      if(request.signal.aborted)throw new Error('Campaign download timed out');
+      entry.url=URL.createObjectURL(blob);
+    }).catch(()=>{entry.failed=true;}).finally(()=>{
+      clearTimeout(entry.timeout);
+      if(!disposed&&!usingImages)updatePlayback();
+    });
+    return entry;
+  }
+  function clearVideoBuffers(){
+    for(const entry of bufferedVideos.values()){
+      clearTimeout(entry.timeout);entry.request.abort();
+      if(entry.url)URL.revokeObjectURL(entry.url);
+    }
+    bufferedVideos.clear();
+  }
   function clearAnimation(){
+    imageGeneration++;
     clearTimeout(imageLoadTimeout);imageLoadTimeout=undefined;
     animation.hidden=true;animation.removeAttribute('src');campaign.classList.remove('has-animation');
   }
@@ -90,15 +123,15 @@ function bindCampaignMotion(){
   }
   function showStill(){
     imageFailed=true;introFinished=campaignIntroComplete=true;
-    clearIntroTimer();clearAnimation();showContent({still:true});
+    clearIntroTimer();clearAnimation();nextAnimation.removeAttribute('src');showContent({still:true});
   }
   function showAnimation(){
     if(imageFailed)return;
-    const source=introFinished?animation.dataset.loopSrc:animation.dataset.introSrc;
+    const source=introFinished?loopImageSource:introImageSource;
     if(animation.getAttribute('src')===source)return;
     clearAnimation();
     // A failed or slow alternative must not indefinitely hide the collection.
-    imageLoadTimeout=setTimeout(showStill,8000);
+    imageLoadTimeout=setTimeout(showStill,12000);
     animation.src=source;
   }
   function useAnimatedImages(){
@@ -107,7 +140,7 @@ function bindCampaignMotion(){
     campaign.classList.remove('has-video');
     // Video autoplay can be refused by iOS. The same frames remain automatic
     // through animated images, without adding playback controls or needing a tap.
-    video.removeAttribute('src');video.load();updatePlayback();
+    video.removeAttribute('src');delete video.dataset.activeSrc;video.load();clearVideoBuffers();updatePlayback();
   }
   function updatePlayback(){
     if(!shouldPlay()){
@@ -119,12 +152,19 @@ function bindCampaignMotion(){
       return;
     }
     if(usingImages){showAnimation();return;}
-    const source=introFinished?video.dataset.loopSrc:video.dataset.introSrc;
-    if(video.getAttribute('src')!==source){
+    const source=introFinished?loopSource:introSource;
+    let playbackURL=source;
+    if(mobile){
+      const prepared=prepareVideo(source);
+      if(prepared.failed){if(introFinished)useAnimatedImages();else finishIntro();return;}
+      if(!prepared.url)return;
+      playbackURL=prepared.url;
+    }
+    if(video.getAttribute('src')!==playbackURL){
       campaign.classList.remove('has-video');
       video.loop=false;video.preload='auto';
       video.poster=introFinished?'/edg-logo-tremor-poster.png':'/edg-intro-poster.jpg';
-      video.src=source;
+      video.dataset.activeSrc=source;video.src=playbackURL;
     }
     if(!introFinished&&!introTimeout){
       introTimeout=setTimeout(()=>{introTimeout=undefined;if(shouldPlay()&&!introFinished)finishIntro();},8000);
@@ -132,25 +172,37 @@ function bindCampaignMotion(){
     if(video.paused)video.play().then(()=>{
       if(usingImages||!shouldPlay())video.pause();
     }).catch(error=>{
-      if(disposed||usingImages||source!==video.getAttribute('src')||!shouldPlay()||error.name==='AbortError')return;
+      if(disposed||usingImages||playbackURL!==video.getAttribute('src')||!shouldPlay()||error.name==='AbortError')return;
       if(error.name==='NotAllowedError'||introFinished)useAnimatedImages();
       else finishIntro();
     });
   }
-  animation.addEventListener('load',()=>{
+  animation.addEventListener('load',async()=>{
     if(disposed||!usingImages||imageFailed||!animation.getAttribute('src')||!animation.complete||!animation.naturalWidth)return;
+    if(!shouldPlay()){updatePlayback();return;}
+    const generation=imageGeneration,source=animation.getAttribute('src');
+    try{await animation.decode();}catch{
+      if(!disposed&&usingImages&&generation===imageGeneration&&source===animation.getAttribute('src')&&shouldPlay())showStill();
+      return;
+    }
+    if(disposed||imageFailed||generation!==imageGeneration||source!==animation.getAttribute('src'))return;
     if(!shouldPlay()){updatePlayback();return;}
     clearTimeout(imageLoadTimeout);imageLoadTimeout=undefined;
     animation.hidden=false;campaign.classList.add('has-animation');
     if(!introFinished){
       introImageStarted=true;clearIntroTimer();
+      // Prepare the second image during the intro, before its first display.
+      if(!nextAnimation.getAttribute('src'))nextAnimation.src=loopImageSource;
       // This asset contains the original 3.4-second intro and plays exactly once.
       introTimeout=setTimeout(finishIntro,3400);
     }
   },options);
   animation.addEventListener('error',()=>{if(usingImages&&!disposed&&animation.getAttribute('src'))showStill();},options);
   video.addEventListener('playing',()=>{
-    if(!usingImages&&shouldPlay())campaign.classList.add('has-video');
+    if(!usingImages&&shouldPlay()){
+      campaign.classList.add('has-video');
+      if(mobile&&!introFinished)prepareVideo(loopSource);
+    }
     else video.pause();
   },options);
   video.addEventListener('ended',()=>{
@@ -173,6 +225,7 @@ function bindCampaignMotion(){
     if(!introFinished&&(video.currentTime>0||introImageStarted))campaignIntroComplete=true;
     disposed=true;observer.disconnect();controller.abort();clearIntroTimer();clearAnimation();
     video.pause();if(video.getAttribute('src')){video.removeAttribute('src');video.load();}
+    clearVideoBuffers();nextAnimation.removeAttribute('src');
   };
 }
 function storeShell(content) {

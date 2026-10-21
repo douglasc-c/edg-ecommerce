@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 
-export const campaignVideoPaths=new Set(['/edg-intro.mp4','/edg-logo-tremor-loop.mp4']);
+export const campaignVideoPaths=new Set(['/edg-intro.mp4','/edg-intro-mobile.mp4','/edg-logo-tremor-loop.mp4']);
 
 function matchesIfRange(value,headers){
   if(!value)return true;
@@ -10,7 +10,7 @@ function matchesIfRange(value,headers){
   return !!modified&&Number.isFinite(Date.parse(value))&&Date.parse(value)===Date.parse(modified);
 }
 
-// These two small campaign files are served identically by Node and Workers.
+// These small campaign files are served identically by Node and Workers.
 // Safari probes MP4s with bytes=0-1 before requesting the remaining data.
 export function campaignVideoResponse({method='GET',headers:requestHeaders={}},content,responseHeaders={}){
   const request=new Headers(requestHeaders),headers=new Headers(responseHeaders);
