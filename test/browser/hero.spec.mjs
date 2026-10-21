@@ -142,6 +142,16 @@ test('movimiento reducido no descarga MP4 hasta activar las animaciones expresam
 });
 
 test('una intro no encontrada mantiene la colección accesible y reproduce el loop',async({page})=>{
+  await page.addInitScript(()=>{
+    // Force WebKit's possible ordering: the real failed play() rejects before
+    // the application receives the media error notification for that source.
+    document.addEventListener('error',event=>{
+      const media=event.target;
+      if(!event.isTrusted||!(media instanceof HTMLVideoElement)||!media.currentSrc.endsWith('/edg-intro.mp4'))return;
+      event.stopImmediatePropagation();
+      setTimeout(()=>media.dispatchEvent(new Event('error')),100);
+    },true);
+  });
   await page.route(`**${INTRO}`,route=>route.fulfill({status:404,contentType:'text/plain',body:'Intro not found'}));
   await page.goto('/');
   const elements=heroElements(page),{video,description,collection}=elements;

@@ -87,11 +87,14 @@ function bindCampaignMotion(){
   function finishIntro(){
     if(disposed)return;
     introFinished=campaignIntroComplete=true;
+    // A failed intro can reject play() before dispatching its error event.
+    // That source's failure must not prevent the loop from being attempted.
+    playbackBlocked=false;
     clearTimeout(introTimeout);introTimeout=undefined;
     // The final-frame poster covers the source change. Reusing this element also
     // preserves Safari's playback permission when a tap was needed for the intro.
     showContent({still:true});
-    updatePlayback();
+    updatePlayButton();updatePlayback();
   }
   function blockPlayback(){
     playbackBlocked=true;video.pause();
