@@ -13,6 +13,53 @@ async function waitForScrollToSettle(page){
   }));
 }
 
+async function headerGeometry(header){
+  return header.evaluate(element=>{
+    const box=element.getBoundingClientRect();
+    return {top:box.top,bottom:box.bottom,height:box.height,mainTop:element.nextElementSibling.getBoundingClientRect().top+scrollY,scroll:scrollY};
+  });
+}
+
+async function scrollHeader(page,target,hidden,baseline){
+  // Observe actual rendered positions. Waiting for scroll alone can finish
+  // while the header's transform is still transitioning.
+  const motion=await page.evaluate(({target,hidden})=>new Promise(resolve=>{
+    const header=document.querySelector('.store-header'),samples=[];
+    const started=performance.now();let settled=0;
+    window.scrollTo({top:target,behavior:'instant'});
+    const sample=()=>{
+      const box=header.getBoundingClientRect();
+      const state={at:performance.now(),top:box.top,bottom:box.bottom,height:box.height,mainTop:header.nextElementSibling.getBoundingClientRect().top+scrollY,scroll:scrollY,hidden:header.classList.contains('is-scroll-hidden')};
+      samples.push(state);
+      const shown=target>=state.mainTop?Math.abs(state.top)<=1:state.top>=-1;
+      const complete=state.hidden===hidden&&(hidden?state.bottom<=1:shown)&&Math.abs(state.scroll-target)<=1;
+      settled=complete?settled+1:0;
+      if(settled>=3||performance.now()-started>2000)resolve({complete:settled>=3,samples});
+      else requestAnimationFrame(sample);
+    };
+    requestAnimationFrame(sample);
+  }),{target,hidden});
+  expect(motion.complete,`Header must ${hidden?'hide':'show'} at scroll ${target}; final state: ${JSON.stringify(motion.samples.at(-1))}`).toBe(true);
+  expect(Math.max(...motion.samples.map(state=>Math.abs(state.scroll-target))),'The header must not change the requested scroll position').toBeLessThanOrEqual(1);
+  expect(Math.max(...motion.samples.map(state=>Math.abs(state.height-baseline.height))),'Sliding must preserve the header height').toBeLessThanOrEqual(1);
+  expect(Math.max(...motion.samples.map(state=>Math.abs(state.mainTop-baseline.mainTop))),'Sliding must preserve the main content position in the document').toBeLessThanOrEqual(1);
+  return motion.samples;
+}
+
+function expectHeaderMotion(samples,{reducedMotion,mobile},hidden){
+  const active=samples.filter(state=>state.hidden===hidden);
+  const intermediate=active.filter(state=>state.top<-1&&state.bottom>1);
+  if(reducedMotion==='reduce'){
+    expect(intermediate,'Reduced motion must switch the header without interpolated positions').toHaveLength(0);
+  }else if(mobile){
+    expect(intermediate.length,'The mobile header must slide through real intermediate positions').toBeGreaterThan(0);
+    for(let index=1;index<active.length;index++){
+      const delta=active[index].top-active[index-1].top;
+      expect(hidden?delta:-delta,'The slide must not reverse direction mid-transition').toBeLessThanOrEqual(1);
+    }
+  }
+}
+
 async function expectReadableHeaderControls(header){
   const login=header.getByRole('button',{name:'Iniciar sesión',exact:true});
   const loginWidth=await login.evaluate(button=>({client:button.clientWidth,scroll:button.scrollWidth}));
@@ -29,79 +76,126 @@ async function expectReadableHeaderControls(header){
 }
 
 for(const scenario of [
-  {name:'escritorio',viewport:{width:1440,height:1000},reducedMotion:'no-preference'},
-  {name:'móvil con movimiento reducido',viewport:{width:390,height:844},reducedMotion:'reduce'},
-])test(`el header cambia al desplazar, conserva el foco y no tapa la colección: ${scenario.name}`,async({page})=>{
-  await page.setViewportSize(scenario.viewport);
-  await page.emulateMedia({reducedMotion:scenario.reducedMotion});
-  await page.goto('/');
-  const header=page.getByRole('banner');
-  const home=header.getByRole('link',{name:'Inicio',exact:true});
-  const logo=header.getByRole('link',{name:'EDG',exact:true,includeHidden:true});
-  const accessibleLogo=header.getByRole('link',{name:'EDG',exact:true});
-  await expect(header).toHaveCSS('background-color','rgb(0, 0, 0)');
-  const initialHeight=(await header.boundingBox()).height;
-  await expectReadableHeaderControls(header);
-  await expect(logo).toHaveCount(1);
-  await expect(accessibleLogo).toHaveCount(0);
-  await page.keyboard.press('Tab');
-  await expect(home).toBeFocused();
-  await logo.evaluate(link=>link.focus());
-  await expect(home).toBeFocused();
+  {name:'escritorio',viewport:{width:1440,height:1000},mobile:false,reducedMotion:'no-preference'},
+  {name:'móvil',viewport:{width:390,height:844},mobile:true,reducedMotion:'no-preference'},
+  {name:'móvil con movimiento reducido',viewport:{width:390,height:844},mobile:true,reducedMotion:'reduce'},
+])test.describe(scenario.name,()=>{
+  test.use({viewport:scenario.viewport,isMobile:scenario.mobile,hasTouch:scenario.mobile,reducedMotion:scenario.reducedMotion});
 
-  await page.evaluate(()=>window.scrollTo(0,400));
-  await expect(header).toHaveCSS('background-color','rgb(255, 255, 255)');
-  await expect(accessibleLogo).toBeVisible();
-  const scrolledBox=await header.boundingBox();
-  expect(Math.abs(scrolledBox.y)).toBeLessThanOrEqual(1);
-  expect(Math.abs(scrolledBox.height-initialHeight)).toBeLessThanOrEqual(1);
-  await expectReadableHeaderControls(header);
-  await logo.focus();
-  await expect(logo).toBeFocused();
+  test('el header sigue la dirección sin temblar, conserva el foco y respeta la colección',async({page})=>{
+    const errors=[];page.on('pageerror',error=>errors.push(error.message));
+    await page.goto('/');
+    const header=page.getByRole('banner');
+    const home=header.getByRole('link',{name:'Inicio',exact:true});
+    const logo=header.getByRole('link',{name:'EDG',exact:true,includeHidden:true});
+    const accessibleLogo=header.getByRole('link',{name:'EDG',exact:true});
+    await expect(header).toHaveCSS('background-color','rgb(0, 0, 0)');
+    const baseline=await headerGeometry(header);
+    expect(baseline.scroll).toBe(0);
+    await expectReadableHeaderControls(header);
+    await expect(logo).toHaveCount(1);
+    await expect(accessibleLogo).toHaveCount(0);
+    if(scenario.mobile)expect(await page.evaluate(()=>matchMedia('(hover:none)').matches)).toBe(true);
+    await page.keyboard.press('Tab');
+    await expect(home).toBeFocused();
+    await logo.evaluate(link=>link.focus());
+    await expect(home).toBeFocused();
+    // Direction must be tested without keyboard focus pinning the header open.
+    await home.evaluate(link=>link.blur());
 
-  await page.evaluate(()=>window.scrollTo(0,0));
-  await expect(header).toHaveCSS('background-color','rgb(0, 0, 0)');
-  await expect(accessibleLogo).toHaveCount(0);
-  await expect(home).toBeFocused();
-  await logo.evaluate(link=>link.focus());
-  await expect(home).toBeFocused();
-  expect(Math.abs((await header.boundingBox()).height-initialHeight)).toBeLessThanOrEqual(1);
-  await expectReadableHeaderControls(header);
+    await scrollHeader(page,Math.max(1,Math.floor(baseline.mainTop)-2),false,baseline);
+    const hiding=await scrollHeader(page,600,true,baseline);
+    expectHeaderMotion(hiding,scenario,true);
+    await expect(header).toHaveCSS('background-color','rgb(255, 255, 255)');
+    for(const position of [598,601,599,602])await scrollHeader(page,position,true,baseline);
+    // Deliberate upward travel accumulates across small scroll events.
+    for(const position of [599,596,593])await scrollHeader(page,position,true,baseline);
+    const showing=await scrollHeader(page,590,false,baseline);
+    expectHeaderMotion(showing,scenario,false);
+    for(const position of [592,589,591,588])await scrollHeader(page,position,false,baseline);
+    await scrollHeader(page,640,true,baseline);
 
-  if(scenario.reducedMotion==='reduce'){
-    for(const element of [header,header.locator('.store-header-brand')]){
-      const durations=await element.evaluate(node=>getComputedStyle(node).transitionDuration.split(',').map(value=>parseFloat(value)));
-      expect(durations.every(duration=>duration===0)).toBe(true);
+    // A real keyboard action must reveal offscreen controls without scrolling
+    // the document to them. Keyboard focus also keeps the header available.
+    await page.keyboard.press('Tab');
+    await expect.poll(()=>header.evaluate(element=>!!element.querySelector(':focus-visible'))).toBe(true);
+    await expect.poll(async()=>Math.abs((await header.boundingBox()).y)).toBeLessThanOrEqual(1);
+    expect(await page.evaluate(()=>scrollY)).toBe(640);
+    await scrollHeader(page,800,false,baseline);
+    await expect(accessibleLogo).toBeVisible();
+    await expectReadableHeaderControls(header);
+    await logo.focus();
+    await expect(logo).toBeFocused();
+    await scrollHeader(page,0,false,baseline);
+    await expect(header).toHaveCSS('background-color','rgb(0, 0, 0)');
+    await expect(accessibleLogo).toHaveCount(0);
+    await expect(home).toBeFocused();
+    await logo.evaluate(link=>link.focus());
+    await expect(home).toBeFocused();
+
+    if(scenario.reducedMotion==='reduce'){
+      for(const element of [header,header.locator('.store-header-brand')]){
+        const durations=await element.evaluate(node=>getComputedStyle(node).transitionDuration.split(',').map(value=>parseFloat(value)));
+        expect(durations.every(duration=>duration===0)).toBe(true);
+      }
     }
-  }
 
-  const previousHeader=await header.elementHandle();
-  await header.getByRole('link',{name:'Colección',exact:true}).click();
-  await expect(page).toHaveURL(/#catalog$/);
-  await expect.poll(()=>previousHeader.evaluate(node=>node.isConnected)).toBe(false);
-  const collectionTitle=page.getByRole('heading',{name:'LA COLECCIÓN.',exact:true});
-  await expect(collectionTitle).toBeInViewport({ratio:1});
-  await waitForScrollToSettle(page);
-  const titleBox=await collectionTitle.boundingBox(),headerBox=await header.boundingBox();
-  expect(titleBox.y).toBeGreaterThanOrEqual(headerBox.y+headerBox.height-1);
-  expect(titleBox.y+titleBox.height).toBeLessThanOrEqual(scenario.viewport.height);
+    // Prevent only this link's navigation so native pointer/touch focus can be
+    // checked independently: unlike keyboard focus, it must not pin the header.
+    await home.evaluate(link=>{link.blur();link.addEventListener('click',event=>event.preventDefault(),{once:true});});
+    if(scenario.mobile)await home.tap();else await home.click();
+    expect(await header.evaluate(element=>!!element.querySelector(':focus-visible'))).toBe(false);
+    if(scenario.mobile)await expect(home).toHaveCSS('opacity','1');
+    await scrollHeader(page,500,true,baseline);
+    await scrollHeader(page,450,false,baseline);
+    await expectReadableHeaderControls(header);
 
-  // Inspect the replacement header before its first paint, so a black flash cannot pass by settling later.
-  await header.evaluate(current=>{
-    window.rebuiltHeaderBackground=null;
-    const observer=new MutationObserver(()=>{
-      if(current.isConnected)return;
-      const replacement=document.querySelector('header');
-      if(!replacement)return;
-      window.rebuiltHeaderBackground=getComputedStyle(replacement).backgroundColor;
-      observer.disconnect();
+    const previousHeader=await header.elementHandle();
+    await header.getByRole('link',{name:'Colección',exact:true}).click();
+    await expect(page).toHaveURL(/#catalog$/);
+    await expect.poll(()=>previousHeader.evaluate(node=>node.isConnected)).toBe(false);
+    const collectionTitle=page.getByRole('heading',{name:'LA COLECCIÓN.',exact:true});
+    await expect(collectionTitle).toBeInViewport({ratio:1});
+    await waitForScrollToSettle(page);
+    // A fragment jump may precede the replacement header's binder. Establish
+    // a real downward movement before testing persistence of the hidden state.
+    const collectionScroll=await page.evaluate(()=>scrollY);
+    await scrollHeader(page,collectionScroll+24,true,baseline);
+    await expect(header).toHaveCSS('background-color','rgb(255, 255, 255)');
+    const beforeFilter=await headerGeometry(header);
+
+    // Inspect the replacement before its first paint: its old hidden state and
+    // white background must be preserved, with no flash or document movement.
+    await header.evaluate(current=>{
+      window.rebuiltHeaderState=null;
+      const observer=new MutationObserver(()=>{
+        if(current.isConnected)return;
+        const replacement=document.querySelector('.store-header');
+        if(!replacement)return;
+        const box=replacement.getBoundingClientRect();
+        window.rebuiltHeaderState={background:getComputedStyle(replacement).backgroundColor,hidden:replacement.classList.contains('is-scroll-hidden'),top:box.top,bottom:box.bottom,height:box.height,scroll:scrollY,mainTop:replacement.nextElementSibling.getBoundingClientRect().top+scrollY};
+        observer.disconnect();
+      });
+      observer.observe(current.parentElement,{childList:true});
     });
-    observer.observe(current.parentElement,{childList:true});
+    await page.locator('.filters').getByRole('button').nth(1).click();
+    await expect.poll(()=>page.evaluate(()=>window.rebuiltHeaderState)).not.toBeNull();
+    const rebuilt=await page.evaluate(()=>window.rebuiltHeaderState);
+    expect(rebuilt.background).toBe('rgb(255, 255, 255)');
+    expect(rebuilt.hidden).toBe(true);
+    expect(rebuilt.bottom).toBeLessThanOrEqual(1);
+    expect(Math.abs(rebuilt.height-baseline.height)).toBeLessThanOrEqual(1);
+    expect(Math.abs(rebuilt.mainTop-baseline.mainTop)).toBeLessThanOrEqual(1);
+    expect(Math.abs(rebuilt.scroll-beforeFilter.scroll)).toBeLessThanOrEqual(1);
+    await waitForScrollToSettle(page);
+    expect(Math.abs((await headerGeometry(header)).scroll-beforeFilter.scroll)).toBeLessThanOrEqual(1);
+
+    await scrollHeader(page,beforeFilter.scroll-48,false,baseline);
+    const titleBox=await collectionTitle.boundingBox(),headerBox=await header.boundingBox();
+    expect(titleBox.y).toBeGreaterThanOrEqual(headerBox.y+headerBox.height-1);
+    expect(titleBox.y+titleBox.height).toBeLessThanOrEqual(scenario.viewport.height);
+    await expectReadableHeaderControls(header);
+    expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
+    expect(errors).toEqual([]);
   });
-  await page.locator('.filters').getByRole('button').nth(1).click();
-  await expect.poll(()=>page.evaluate(()=>window.rebuiltHeaderBackground)).toBe('rgb(255, 255, 255)');
-  await expect(accessibleLogo).toBeVisible();
-  await waitForScrollToSettle(page);
-  expect(Math.abs((await header.boundingBox()).y)).toBeLessThanOrEqual(1);
-  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
 });
