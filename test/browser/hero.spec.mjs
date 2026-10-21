@@ -1,9 +1,9 @@
 import {test,expect} from '@playwright/test';
 
-const INTRO='/edg-intro.mp4';
+const INTRO='/edg-intro-mobile.mp4';
 const LOOP='/edg-logo-tremor-loop.mp4';
-const INTRO_IMAGE='/edg-intro-animated.webp';
-const LOOP_IMAGE='/edg-logo-tremor-animated.webp';
+const INTRO_IMAGE='/edg-intro-mobile-animated.webp';
+const LOOP_IMAGE='/edg-logo-tremor-mobile-animated.webp';
 
 test.use({viewport:{width:390,height:844},isMobile:true,hasTouch:true});
 
@@ -29,7 +29,7 @@ function mediaRequests(page){
 }
 
 async function expectPlaying(video,source){
-  await expect.poll(()=>video.evaluate((media,path)=>!media.paused&&media.currentTime>0&&new URL(media.currentSrc,location.href).pathname===path,source)).toBe(true);
+  await expect.poll(()=>video.evaluate((media,path)=>!media.paused&&media.currentTime>0&&media.dataset.activeSrc===path,source)).toBe(true);
 }
 
 async function expectLoopRepeats(video){
@@ -72,10 +72,10 @@ async function expectStaticHero({video,poster,description,collection}){
 async function observeMediaEvents(page){
   await page.addInitScript(()=>{
     window.heroMediaEvents=[];
-    for(const type of ['playing','ended'])document.addEventListener(type,event=>{
+    for(const type of ['playing','ended','waiting'])document.addEventListener(type,event=>{
       const media=event.target;
-      if(!(media instanceof HTMLVideoElement))return;
-      window.heroMediaEvents.push({type,source:new URL(media.currentSrc,location.href).pathname,trusted:event.isTrusted});
+      if(!(media instanceof HTMLVideoElement)||media.id!=='campaign-video')return;
+      window.heroMediaEvents.push({type,source:media.dataset.activeSrc,currentSrc:media.currentSrc,currentTime:media.currentTime,at:performance.now(),trusted:event.isTrusted});
     },true);
   });
 }
@@ -102,7 +102,7 @@ test('la intro termina antes de mostrar la colección y activar el loop sin cont
     await expectPlaying(video,INTRO);
     await expect(description).toBeHidden();
     await expect(collection).toBeHidden();
-    await expect.poll(()=>page.evaluate(()=>window.heroMediaEvents.some(event=>event.type==='ended'&&event.source==='/edg-intro.mp4'&&event.trusted)),{timeout:10000}).toBe(true);
+    await expect.poll(()=>page.evaluate(source=>window.heroMediaEvents.some(event=>event.type==='ended'&&event.source===source&&event.trusted),INTRO),{timeout:10000}).toBe(true);
     await expect(description).toBeVisible();
     await expect(collection).toBeVisible();
     await expect(hero.getByText('ORIGINAL . BARCELONA',{exact:true})).toBeVisible();
@@ -129,7 +129,7 @@ test('la intro termina antes de mostrar la colección y activar el loop sin cont
     await expectNoPlaybackControls(elements);
     await expectPlaying(video,LOOP);
     expect(requests.filter(path=>path===INTRO)).toHaveLength(introRequestCount);
-    expect(await page.evaluate(()=>window.heroMediaEvents.filter(event=>event.type==='playing'&&event.source==='/edg-intro.mp4').length)).toBe(introPlayCount);
+    expect(await page.evaluate(source=>window.heroMediaEvents.filter(event=>event.type==='playing'&&event.source===source).length,INTRO)).toBe(introPlayCount);
     expect(requests).not.toContain(INTRO_IMAGE);
     expect(requests).not.toContain(LOOP_IMAGE);
     expect(errors).toEqual([]);
@@ -146,23 +146,15 @@ test('la campaña y el carrusel arrancan automáticamente sin un control de acti
   await expectPlaying(video,INTRO);
   await expectNoPlaybackControls(elements);
   await expect(page.locator('.deck-carousel-track')).toHaveCSS('animation-name','deck-scroll');
-  await expect.poll(()=>video.getAttribute('src'),{timeout:10000}).toBe(LOOP);
+  await expect(video).toHaveAttribute('data-active-src',LOOP,{timeout:10000});
   await expectPlaying(video,LOOP);
   expect(requests).not.toContain(INTRO_IMAGE);
   expect(requests).not.toContain(LOOP_IMAGE);
 });
 
 test('una intro no encontrada mantiene la colección accesible y reproduce el loop',async({page})=>{
-  await page.addInitScript(()=>{
-    // Force WebKit's possible ordering: the real failed play() rejects before
-    // the application receives the media error notification for that source.
-    document.addEventListener('error',event=>{
-      const media=event.target;
-      if(!event.isTrusted||!(media instanceof HTMLVideoElement)||!media.currentSrc.endsWith('/edg-intro.mp4'))return;
-      event.stopImmediatePropagation();
-      setTimeout(()=>media.dispatchEvent(new Event('error')),100);
-    },true);
-  });
+  // Mobile fetches the complete clip before assigning a media source, so a 404
+  // must advance to the loop without relying on an HTMLMediaElement error event.
   await page.route(`**${INTRO}`,route=>route.fulfill({status:404,contentType:'text/plain',body:'Intro not found'}));
   await page.goto('/');
   const elements=heroElements(page),{video,description,collection}=elements;
@@ -173,6 +165,59 @@ test('una intro no encontrada mantiene la colección accesible y reproduce el lo
   await collection.click();
   await expect(page).toHaveURL(/#catalog$/);
   await expect(page.getByRole('heading',{name:'LA COLECCIÓN.',exact:true})).toBeInViewport();
+});
+
+test('en una conexión móvil lenta descarga la intro antes de reproducirla y prepara el loop sin cortes',async({page,browserName})=>{
+  test.skip(browserName!=='chromium','Network throttling uses Chromium CDP.');
+  const errors=[];page.on('pageerror',error=>errors.push(error.message));
+  await observeMediaEvents(page);
+  const network=await page.context().newCDPSession(page);
+  try{
+    await network.send('Network.enable');
+    await network.send('Network.setCacheDisabled',{cacheDisabled:true});
+    await network.send('Network.emulateNetworkConditions',{
+      offline:false,latency:150,downloadThroughput:750000/8,uploadThroughput:750000/8,connectionType:'cellular3g',
+    });
+    // Use the actual HTTP responses and native media decoder under throttling.
+    await page.goto('/',{waitUntil:'domcontentloaded'});
+    const elements=heroElements(page),{video,description,collection}=elements;
+    await expect.poll(()=>page.evaluate(source=>window.heroMediaEvents.some(event=>event.type==='ended'&&event.source===source&&event.trusted),INTRO),{timeout:30000,intervals:[150]}).toBe(true);
+    await expect(video).toHaveAttribute('data-active-src',LOOP,{timeout:10000});
+    await expectPlaying(video,LOOP);
+    await expect(description).toBeVisible();
+    await expect(collection).toBeVisible();
+    await expectNoPlaybackControls(elements);
+    await expect(video).toHaveJSProperty('loop',false);
+
+    const events=await page.evaluate(()=>window.heroMediaEvents);
+    const playingIndex=events.findIndex(event=>event.type==='playing'&&event.source===INTRO&&event.trusted);
+    const endedIndex=events.findIndex(event=>event.type==='ended'&&event.source===INTRO&&event.trusted);
+    expect(playingIndex).toBeGreaterThanOrEqual(0);
+    expect(endedIndex).toBeGreaterThan(playingIndex);
+    const introPlaying=events[playingIndex],introEnded=events[endedIndex];
+    expect(introPlaying.currentSrc).toMatch(/^blob:/);
+    expect(introEnded.currentSrc).toBe(introPlaying.currentSrc);
+    expect(introEnded.currentTime).toBeCloseTo(3.4,2);
+    expect(events.slice(playingIndex+1,endedIndex).filter(event=>event.type==='waiting'&&event.source===INTRO),'The complete intro must play without waiting for more data').toEqual([]);
+
+    // Resource Timing shares performance.now()'s clock with the native events.
+    // This proves actual prebuffering, rather than just checking a preload hint.
+    const resources=await page.evaluate(paths=>Object.fromEntries(paths.map(path=>{
+      const resource=performance.getEntriesByName(new URL(path,location.href).href,'resource').find(entry=>entry.initiatorType==='fetch');
+      return [path,resource?{startTime:resource.startTime,responseEnd:resource.responseEnd,decodedBodySize:resource.decodedBodySize}:null];
+    })),[INTRO,LOOP]);
+    expect(resources[INTRO]).not.toBeNull();
+    expect(resources[INTRO].decodedBodySize).toBeGreaterThan(0);
+    expect(resources[INTRO].responseEnd).toBeGreaterThan(0);
+    expect(resources[INTRO].responseEnd).toBeLessThanOrEqual(introPlaying.at);
+    expect(resources[LOOP]).not.toBeNull();
+    expect(resources[LOOP].startTime).toBeGreaterThanOrEqual(introPlaying.at);
+    expect(resources[LOOP].startTime).toBeLessThan(introEnded.at);
+    expect(errors).toEqual([]);
+  }finally{
+    await network.send('Network.emulateNetworkConditions',{offline:false,latency:0,downloadThroughput:-1,uploadThroughput:-1});
+    await network.detach();
+  }
 });
 
 test('autoplay bloqueado conserva la apertura y el logo animados sin botones ni gestos',async({page})=>{

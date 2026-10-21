@@ -18,7 +18,7 @@ try{
     serviceBindings:{ASSETS:async request=>new Response(await readFile(resolve('public',new URL(request.url).pathname==='/'?'index.html':new URL(request.url).pathname.slice(1))),{headers:{ETag:'W/"asset"','Cache-Control':'public, max-age=60'}})}};
   const create=opts=>new Miniflare({...convertV4MiniflareOptions(opts),resourcePersistencePath:join(directory,"storage")});
   mf=create(options);
-  for(const path of ['/edg-intro.mp4','/edg-logo-tremor-loop.mp4']){
+  for(const path of ['/edg-intro.mp4','/edg-intro-mobile.mp4','/edg-logo-tremor-loop.mp4']){
     const file=await readFile(resolve('public',path.slice(1)));
     let etag;
     for(const [range,start,end] of [['bytes=0-1',0,1],['bytes=1000-1999',1000,1999],[`bytes=${file.length-8}-`,file.length-8,file.length-1],['bytes=-8',file.length-8,file.length-1]]){

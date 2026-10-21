@@ -217,7 +217,7 @@ export function createApp({db=database(),config=configuration(),provider=provide
   const handler=async(req,res)=>{
     res.setHeader('Content-Language','es');
     res.setHeader('X-Content-Type-Options','nosniff');res.setHeader('X-Frame-Options','DENY');res.setHeader('Referrer-Policy','same-origin');
-    res.setHeader('Content-Security-Policy',"default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'");
+    res.setHeader('Content-Security-Policy',"default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; media-src 'self' blob:; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'");
     if(config.production) res.setHeader('Strict-Transport-Security','max-age=31536000');
     try {
       const url=new URL(req.url,config.url);
@@ -232,6 +232,9 @@ export function createApp({db=database(),config=configuration(),provider=provide
       files['/edg-intro-poster.jpg']='edg-intro-poster.jpg';
       files['/edg-intro-animated.webp']='edg-intro-animated.webp';
       files['/edg-logo-tremor-animated.webp']='edg-logo-tremor-animated.webp';
+      files['/edg-intro-mobile.mp4']='edg-intro-mobile.mp4';
+      files['/edg-intro-mobile-animated.webp']='edg-intro-mobile-animated.webp';
+      files['/edg-logo-tremor-mobile-animated.webp']='edg-logo-tremor-mobile-animated.webp';
       const filename=files[url.pathname];requireThat(filename,404,'Página no encontrada.');
       const content=await readFile(new URL(`../public/${filename}`,import.meta.url));
       if(campaignVideoPaths.has(url.pathname)){

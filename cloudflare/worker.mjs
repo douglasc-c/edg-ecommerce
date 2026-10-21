@@ -60,7 +60,7 @@ export default {
     const headers=new Headers(response.headers);
     headers.set('Content-Language','es');
     headers.set('X-Content-Type-Options','nosniff');headers.set('X-Frame-Options','DENY');
-    headers.set('Content-Security-Policy',"default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'");
+    headers.set('Content-Security-Policy',"default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; media-src 'self' blob:; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'");
     headers.set('Strict-Transport-Security','max-age=31536000');
     return new Response(request.method==='HEAD'?null:response.body,{status:response.status,headers});
   },

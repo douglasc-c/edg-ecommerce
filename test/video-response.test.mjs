@@ -64,7 +64,7 @@ test('ETag fuerte, validación de caché y HEAD son coherentes con el archivo co
   assert.equal(head.body,null);
 });
 
-test('el servidor local sirve ambos MP4 con los mismos encabezados y rangos que producción',async t=>{
+test('el servidor local sirve los MP4 con los mismos encabezados y rangos que producción',async t=>{
   const db=database(':memory:');t.after(()=>db.close());
   const app=createApp({db,config:configuration({COMMERCE_MODE:'catalog',APP_URL:'http://localhost:3000'}),runtime:'worker'});
   async function request(path,method='GET',headers={}){
@@ -76,7 +76,7 @@ test('el servidor local sirve ambos MP4 con los mismos encabezados y rangos que 
     };
     await app.handler({url:path,method,headers},response);return result;
   }
-  for(const path of ['/edg-intro.mp4','/edg-logo-tremor-loop.mp4']){
+  for(const path of ['/edg-intro.mp4','/edg-intro-mobile.mp4','/edg-logo-tremor-loop.mp4']){
     const file=await readFile(new URL(`../public${path}`,import.meta.url));
     const full=await request(path);
     assert.equal(full.status,200);
