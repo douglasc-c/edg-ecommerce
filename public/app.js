@@ -26,38 +26,29 @@ const catalogMode=()=>state.config?.mode==='catalog';
 const demoBanner=()=>catalogMode()?'<div class="demo">TIENDA EN PREPARACIÓN · Descubre los productos. Próximamente podrás comprar.</div>':state.config.mode==='demo'?'<div class="demo">ENTORNO DE DEMOSTRACIÓN · Pagos y envíos simulados, sin cargos reales.</div>':'';
 const brand=()=>`<a class="brand" href="#store"><span class="brand-logo"><img src="/edg-logo.png" alt="EDG"></span></a>`;
 let teardownCampaignMotion=()=>{};
-let campaignMotionPaused=false;
 let campaignIntroComplete=false;
 function campaignHero(){
   return `<section class="campaign${campaignIntroComplete?' is-ready':''}" aria-labelledby="campaign-title">
-    <span class="eyebrow campaign-reveal">EDG / Skateboards</span><h1 id="campaign-title" class="sr-only">EDG Skateboards</h1>
+    <span class="eyebrow campaign-reveal">ORIGINAL . BARCELONA</span><h1 id="campaign-title" class="sr-only">EDG Skateboards</h1>
     <div class="campaign-body"><div class="campaign-media">
       <img class="campaign-poster" src="/edg-logo-tremor-poster.png" width="848" height="480" alt="" fetchpriority="high" decoding="async">
       <video id="campaign-intro" class="campaign-video campaign-intro" width="848" height="480" data-src="/edg-intro.mp4" poster="/edg-intro-poster.jpg" muted playsinline preload="none" aria-hidden="true"></video>
       <video id="campaign-video" class="campaign-video campaign-loop" width="848" height="480" data-src="/edg-logo-tremor-loop.mp4" poster="/edg-logo-tremor-poster.png" muted loop playsinline preload="none" aria-hidden="true"></video>
     </div><p class="campaign-description campaign-reveal">Skateboarding y cultura urbana.</p><a class="btn campaign-cta campaign-reveal" href="#catalog">Explorar la colección <span aria-hidden="true">↗</span></a></div>
-    <div class="campaign-footer campaign-reveal"><span class="campaign-caption">ORIGINAL . BARCELONA</span><button id="campaign-motion-toggle" class="campaign-motion-toggle" type="button" aria-controls="campaign-video" hidden><span class="campaign-motion-label">Reproducir animación</span><span class="campaign-motion-icon" aria-hidden="true">↻</span></button></div>
   </section>`;
 }
 function bindCampaignMotion(){
-  const intro=$('#campaign-intro'),video=$('#campaign-video'),button=$('#campaign-motion-toggle');
-  if(!intro||!video||!button)return ()=>{};
+  const intro=$('#campaign-intro'),video=$('#campaign-video');
+  if(!intro||!video)return ()=>{};
   const campaign=video.closest('.campaign'),preference=window.matchMedia('(prefers-reduced-motion: reduce)');
   const controller=new AbortController(),options={signal:controller.signal};
-  let visible=false,manualMotion=false,disposed=false,loopFailed=false,autoplayBlocked=false,introTimeout;
+  let visible=false,disposed=false,loopFailed=false,autoplayBlocked=false,introTimeout;
   let introFinished=campaignIntroComplete||preference.matches;
   intro.muted=video.muted=true;
-  // Reserve the footer's space while its parent is hidden during the intro.
-  button.hidden=false;
   const activeVideo=()=>introFinished?video:intro;
-  const shouldPlay=()=>!disposed&&!autoplayBlocked&&!(introFinished&&loopFailed)&&visible&&!document.hidden&&!campaignMotionPaused&&(!preference.matches||manualMotion);
+  const shouldPlay=()=>!disposed&&!autoplayBlocked&&!(introFinished&&loopFailed)&&visible&&!document.hidden&&!preference.matches;
   const loadVideo=media=>{
     if(!media.getAttribute('src')){media.preload='auto';media.src=media.dataset.src;}
-  };
-  const updateControl=()=>{
-    if(disposed)return;
-    button.querySelector('.campaign-motion-label').textContent=video.paused?'Reproducir animación':'Pausar animación';
-    button.querySelector('.campaign-motion-icon').textContent=video.paused?'↻':'Ⅱ';
   };
   function revealCampaign({autoplay=true,still=false}={}){
     if(disposed)return;
@@ -65,13 +56,11 @@ function bindCampaignMotion(){
     clearTimeout(introTimeout);introTimeout=undefined;intro.pause();
     campaign.classList.add('is-ready');
     if(still||loopFailed)campaign.classList.remove('has-intro','has-video');
-    button.hidden=loopFailed;
-    updateControl();
     if(autoplay)updatePlayback();
   }
   function updatePlayback(){
     if(!shouldPlay()){
-      intro.pause();video.pause();clearTimeout(introTimeout);introTimeout=undefined;updateControl();return;
+      intro.pause();video.pause();clearTimeout(introTimeout);introTimeout=undefined;return;
     }
     const media=activeVideo();
     loadVideo(media);
@@ -86,35 +75,25 @@ function bindCampaignMotion(){
     }).catch(error=>{
       if(disposed||media!==activeVideo()||!shouldPlay()||error.name==='AbortError')return;
       autoplayBlocked=true;
-      if(!introFinished)revealCampaign({autoplay:false,still:true});
-      else updateControl();
+      revealCampaign({autoplay:false,still:true});
     });
   }
-  button.addEventListener('click',()=>{
-    campaignMotionPaused=!video.paused;
-    if(!campaignMotionPaused){manualMotion=true;autoplayBlocked=false;}
-    updatePlayback();
-  },options);
   intro.addEventListener('playing',()=>{
     if(!introFinished&&shouldPlay())campaign.classList.add('has-intro');
     else intro.pause();
   },options);
   intro.addEventListener('ended',()=>revealCampaign(),options);
   intro.addEventListener('error',()=>{if(!introFinished)revealCampaign({still:true});},options);
-  video.addEventListener('play',updateControl,options);
-  video.addEventListener('pause',updateControl,options);
   video.addEventListener('playing',()=>{
     if(introFinished&&shouldPlay()){
       campaign.classList.add('has-video');campaign.classList.remove('has-intro');
     }else video.pause();
-    updateControl();
   },options);
   video.addEventListener('error',()=>{
     loopFailed=true;video.pause();campaign.classList.remove('has-video');
-    if(introFinished){campaign.classList.remove('has-intro');button.hidden=true;}
+    if(introFinished)campaign.classList.remove('has-intro');
   },options);
   preference.addEventListener('change',()=>{
-    manualMotion=false;
     if(preference.matches)revealCampaign({still:true});
     else updatePlayback();
   },options);
