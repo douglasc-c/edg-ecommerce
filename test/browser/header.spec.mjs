@@ -13,6 +13,21 @@ async function waitForScrollToSettle(page){
   }));
 }
 
+async function expectReadableHeaderControls(header){
+  const login=header.getByRole('button',{name:'Iniciar sesión',exact:true});
+  const loginWidth=await login.evaluate(button=>({client:button.clientWidth,scroll:button.scrollWidth}));
+  expect(loginWidth.scroll,'The login label must remain readable').toBeLessThanOrEqual(loginWidth.client+1);
+  const actions=await Promise.all([login.boundingBox(),header.getByRole('link',{name:/^Carrito/}).boundingBox()]);
+  for(const link of await header.getByRole('navigation').getByRole('link').all()){
+    const nav=await link.boundingBox();
+    for(const action of actions){
+      const width=Math.max(0,Math.min(nav.x+nav.width,action.x+action.width)-Math.max(nav.x,action.x));
+      const height=Math.max(0,Math.min(nav.y+nav.height,action.y+action.height)-Math.max(nav.y,action.y));
+      expect(width*height,'Navigation and account/cart controls must not overlap').toBeLessThanOrEqual(1);
+    }
+  }
+}
+
 for(const scenario of [
   {name:'escritorio',viewport:{width:1440,height:1000},reducedMotion:'no-preference'},
   {name:'móvil con movimiento reducido',viewport:{width:390,height:844},reducedMotion:'reduce'},
@@ -26,6 +41,7 @@ for(const scenario of [
   const accessibleLogo=header.getByRole('link',{name:'EDG',exact:true});
   await expect(header).toHaveCSS('background-color','rgb(0, 0, 0)');
   const initialHeight=(await header.boundingBox()).height;
+  await expectReadableHeaderControls(header);
   await expect(logo).toHaveCount(1);
   await expect(accessibleLogo).toHaveCount(0);
   await page.keyboard.press('Tab');
@@ -39,6 +55,7 @@ for(const scenario of [
   const scrolledBox=await header.boundingBox();
   expect(Math.abs(scrolledBox.y)).toBeLessThanOrEqual(1);
   expect(Math.abs(scrolledBox.height-initialHeight)).toBeLessThanOrEqual(1);
+  await expectReadableHeaderControls(header);
   await logo.focus();
   await expect(logo).toBeFocused();
 
@@ -49,6 +66,7 @@ for(const scenario of [
   await logo.evaluate(link=>link.focus());
   await expect(home).toBeFocused();
   expect(Math.abs((await header.boundingBox()).height-initialHeight)).toBeLessThanOrEqual(1);
+  await expectReadableHeaderControls(header);
 
   if(scenario.reducedMotion==='reduce'){
     for(const element of [header,header.locator('.store-header-brand')]){
