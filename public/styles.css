@@ -52,15 +52,15 @@ button.product-visual{width:100%;border:0;color:var(--ink)}pre{white-space:pre-w
 .campaign{display:grid;grid-template-rows:auto 1fr;justify-items:center;min-height:560px;padding:36px 5vw 20px;background:#000;color:#fff;border-bottom:1px solid #252525;overflow:hidden}
 .campaign>.eyebrow{text-align:center}
 .campaign-body{display:flex;flex-direction:column;align-items:center;justify-content:center;min-width:0;width:100%;padding-bottom:36px}
-.campaign-media{position:relative;width:min(100%,760px);height:clamp(230px,26vw,320px);overflow:hidden;background:#000;isolation:isolate}
-.campaign-poster,.campaign-video{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);display:block;width:130%;max-width:848px;height:auto;aspect-ratio:848/480;object-fit:contain}
+.campaign-media{position:relative;width:min(100%,1120px);height:clamp(340px,38vw,480px);overflow:hidden;background:#000;isolation:isolate}
+.campaign-poster,.campaign-video{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);display:block;width:140%;max-width:1520px;height:auto;aspect-ratio:848/480;object-fit:contain}
 .campaign-poster,.campaign-video{opacity:0;pointer-events:none}.campaign.is-ready .campaign-poster,.campaign.has-intro .campaign-intro,.campaign.has-video .campaign-loop{opacity:1}
 .campaign-reveal{opacity:0;visibility:hidden;transform:translateY(10px);transition:opacity .55s ease,transform .55s ease,visibility 0s .55s}
 .campaign.is-ready .campaign-reveal{opacity:1;visibility:visible;transform:translateY(0);transition-delay:0s}
 .campaign-description{text-align:center;text-transform:uppercase;font-size:12px;line-height:1.6;letter-spacing:1.8px;color:#b8b8b8;margin:0 0 24px}
 .campaign .campaign-cta{border:1px solid #fff;border-radius:0;background:#fff;color:#000;text-transform:uppercase;letter-spacing:1px;font-size:11px;font-weight:700;min-height:48px;max-width:100%;padding:16px 24px;white-space:normal;text-align:center}
 .campaign .campaign-cta:hover{background:#e5e5e5;border-color:#e5e5e5}
-@media(max-width:760px){.campaign{min-height:450px;padding:28px 20px 16px}.campaign-media{height:220px}.campaign-body{padding-bottom:24px}.campaign-description{font-size:11px;letter-spacing:.8px}}
+@media(max-width:760px){.campaign{min-height:450px;padding:28px 20px 16px}.campaign-media{width:calc(100% + 40px);height:clamp(220px,48vw,360px)}.campaign-poster,.campaign-video{width:148%}.campaign-body{padding-bottom:24px}.campaign-description{font-size:11px;letter-spacing:.8px}}
 .deck-carousel{background:#000;color:#fff;padding:64px 0;overflow:hidden}
 .deck-carousel-window{overflow:hidden}
 .deck-carousel-track{display:flex;width:max-content;animation:deck-scroll 120s linear infinite}
