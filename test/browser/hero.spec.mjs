@@ -3,12 +3,14 @@ import {test,expect} from '@playwright/test';
 const INTRO='/edg-intro.mp4';
 const LOOP='/edg-logo-tremor-loop.mp4';
 
+test.use({viewport:{width:390,height:844},isMobile:true,hasTouch:true});
+
 function heroElements(page){
   const hero=page.getByRole('region',{name:'EDG Skateboards',exact:true});
   return {
     hero,
-    intro:hero.locator('#campaign-intro'),
-    loop:hero.locator('#campaign-video'),
+    video:hero.locator('#campaign-video'),
+    play:hero.locator('.campaign-play'),
     poster:hero.locator('img[src="/edg-logo-tremor-poster.png"]'),
     description:hero.getByText('Skateboarding y cultura urbana.',{exact:true}),
     collection:hero.getByRole('link',{name:/Explorar la colección/,includeHidden:true}),
@@ -24,26 +26,32 @@ function mediaRequests(page){
   return requests;
 }
 
-async function expectPlaying(video){
-  await expect.poll(()=>video.evaluate(media=>!media.paused&&media.currentTime>0)).toBe(true);
+async function expectPlaying(video,source){
+  await expect.poll(()=>video.evaluate((media,path)=>!media.paused&&media.currentTime>0&&new URL(media.currentSrc,location.href).pathname===path,source)).toBe(true);
 }
 
-async function expectNoPlaybackControls(hero){
-  await expect(hero.getByRole('button',{includeHidden:true})).toHaveCount(0);
+async function expectLoopRepeats(video){
+  let previous=await video.evaluate(media=>media.currentTime);
+  await expect.poll(async()=>{
+    const state=await video.evaluate(media=>({time:media.currentTime,paused:media.paused,error:media.error?.code}));
+    const repeated=!state.paused&&!state.error&&state.time<previous-1;
+    previous=state.time;return repeated;
+  },{timeout:10000,intervals:[250]}).toBe(true);
+}
+
+async function expectNoPlaybackControls({hero,play}){
+  await expect(play).toBeHidden();
   await expect(hero.locator('video[controls]')).toHaveCount(0);
 }
 
-async function expectStaticHero({hero,intro,loop,poster,description,collection}){
+async function expectStaticHero({video,poster,description,collection}){
   await expect(description).toBeVisible();
   await expect(collection).toBeVisible();
   await expect(poster).toBeVisible();
   await expect(poster).toHaveCSS('opacity','1');
   await expect.poll(()=>poster.evaluate(image=>image.complete&&image.naturalWidth>0)).toBe(true);
-  for(const video of [intro,loop]){
-    await expect(video).toHaveJSProperty('paused',true);
-    await expect(video).toHaveCSS('opacity','0');
-  }
-  await expectNoPlaybackControls(hero);
+  await expect(video).toHaveJSProperty('paused',true);
+  await expect(video).toHaveCSS('opacity','0');
 }
 
 async function observeMediaEvents(page){
@@ -66,26 +74,27 @@ test('la intro termina antes de mostrar la colección y activar el loop sin cont
   await page.route(`**${INTRO}`,async route=>{await introGate;await route.continue();});
   try{
     await page.goto('/',{waitUntil:'domcontentloaded'});
-    const {hero,intro,loop,description,collection}=heroElements(page);
+    const elements=heroElements(page),{hero,video,description,collection}=elements;
     await expect(hero).toBeVisible();
-    await expectNoPlaybackControls(hero);
+    await expectNoPlaybackControls(elements);
     await expect.poll(()=>requests.includes(INTRO)).toBe(true);
     await expect(description).toBeHidden();
     await expect(collection).toHaveCount(1);
     await expect(collection).toBeHidden();
-    await expect(loop).toHaveJSProperty('paused',true);
+    expect(requests).not.toContain(LOOP);
 
     releaseIntro();
-    await expectPlaying(intro);
+    await expectPlaying(video,INTRO);
     await expect(description).toBeHidden();
     await expect(collection).toBeHidden();
-    await expect(loop).toHaveJSProperty('paused',true);
-    await expect(intro).toHaveJSProperty('ended',true,{timeout:10000});
+    await expect.poll(()=>page.evaluate(()=>window.heroMediaEvents.some(event=>event.type==='ended'&&event.source==='/edg-intro.mp4'&&event.trusted)),{timeout:10000}).toBe(true);
     await expect(description).toBeVisible();
     await expect(collection).toBeVisible();
     await expect(hero.getByText('ORIGINAL . BARCELONA',{exact:true})).toBeVisible();
     await expect(hero.getByText('EDG / Skateboards',{exact:true})).toHaveCount(0);
-    await expectPlaying(loop);
+    await expectPlaying(video,LOOP);
+    await expect(video).toHaveJSProperty('loop',true);
+    await expectLoopRepeats(video);
 
     const events=await page.evaluate(()=>window.heroMediaEvents);
     const introPlaying=events.findIndex(event=>event.type==='playing'&&event.source===INTRO);
@@ -102,8 +111,8 @@ test('la intro termina antes de mostrar la colección y activar el loop sin cont
     await page.getByRole('link',{name:'Inicio',exact:true}).click();
     await expect(collection).toBeVisible();
     await expect(description).toBeVisible();
-    await expectNoPlaybackControls(hero);
-    await expectPlaying(loop);
+    await expectNoPlaybackControls(elements);
+    await expectPlaying(video,LOOP);
     expect(requests.filter(path=>path===INTRO)).toHaveLength(introRequestCount);
     expect(await page.evaluate(()=>window.heroMediaEvents.filter(event=>event.type==='playing'&&event.source==='/edg-intro.mp4').length)).toBe(introPlayCount);
     expect(errors).toEqual([]);
@@ -112,40 +121,82 @@ test('la intro termina antes de mostrar la colección y activar el loop sin cont
   }
 });
 
-test('movimiento reducido muestra contenido y poster estático sin controles ni descargas MP4',async({page})=>{
+test('movimiento reducido no descarga MP4 hasta activar las animaciones expresamente',async({page})=>{
   await page.emulateMedia({reducedMotion:'reduce'});
   const requests=mediaRequests(page);
   await page.goto('/');
-  await expectStaticHero(heroElements(page));
-  await page.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))));
+  const elements=heroElements(page),{video,play}=elements;
+  await expectStaticHero(elements);
+  await expect(play).toHaveText(/Activar animaciones/);
+  await expect(play).toBeVisible();
   expect(requests).toEqual([]);
+  await expect(page.locator('.deck-carousel-track')).toHaveCSS('animation-name','none');
+
+  await play.tap();
+  await expectPlaying(video,INTRO);
+  await expectNoPlaybackControls(elements);
+  await expect(page.locator('.deck-carousel-track')).toHaveCSS('animation-name','deck-scroll');
+  await expect.poll(()=>video.getAttribute('src'),{timeout:10000}).toBe(LOOP);
+  await expectPlaying(video,LOOP);
+  expect(await page.evaluate(()=>matchMedia('(prefers-reduced-motion: reduce)').matches)).toBe(true);
 });
 
 test('una intro no encontrada mantiene la colección accesible y reproduce el loop',async({page})=>{
+  await page.addInitScript(()=>{
+    // Force WebKit's possible ordering: the real failed play() rejects before
+    // the application receives the media error notification for that source.
+    document.addEventListener('error',event=>{
+      const media=event.target;
+      if(!event.isTrusted||!(media instanceof HTMLVideoElement)||!media.currentSrc.endsWith('/edg-intro.mp4'))return;
+      event.stopImmediatePropagation();
+      setTimeout(()=>media.dispatchEvent(new Event('error')),100);
+    },true);
+  });
   await page.route(`**${INTRO}`,route=>route.fulfill({status:404,contentType:'text/plain',body:'Intro not found'}));
   await page.goto('/');
-  const {hero,loop,description,collection}=heroElements(page);
+  const elements=heroElements(page),{video,description,collection}=elements;
   await expect(description).toBeVisible();
   await expect(collection).toBeVisible();
-  await expectPlaying(loop);
-  await expectNoPlaybackControls(hero);
+  await expectPlaying(video,LOOP);
+  await expectNoPlaybackControls(elements);
   await collection.click();
   await expect(page).toHaveURL(/#catalog$/);
   await expect(page.getByRole('heading',{name:'LA COLECCIÓN.',exact:true})).toBeInViewport();
 });
 
-test('el bloqueo del autoplay conserva contenido accesible y poster estático sin controles',async({page})=>{
+test('un toque recupera el autoplay bloqueado y conserva el permiso al cambiar al segundo vídeo',async({page})=>{
   await page.addInitScript(()=>{
+    const nativePlay=HTMLMediaElement.prototype.play,unlocked=new WeakSet();
+    let withinGesture=false;
     window.autoplayRejections=0;
+    document.addEventListener('click',event=>{
+      if(!event.isTrusted)return;
+      withinGesture=true;setTimeout(()=>withinGesture=false,0);
+    },true);
     HTMLMediaElement.prototype.play=function(){
-      window.autoplayRejections++;
-      return Promise.reject(new DOMException('Autoplay blocked for this test','NotAllowedError'));
+      if(withinGesture)unlocked.add(this);
+      if(!unlocked.has(this)){
+        window.autoplayRejections++;
+        return Promise.reject(new DOMException('A gesture is required for this media element','NotAllowedError'));
+      }
+      return nativePlay.call(this);
     };
   });
   await observeMediaEvents(page);
   await page.goto('/');
+  const elements=heroElements(page),{video,play}=elements;
   await expect.poll(()=>page.evaluate(()=>window.autoplayRejections)).toBeGreaterThan(0);
-  await expectStaticHero(heroElements(page));
-  const playing=await page.evaluate(()=>window.heroMediaEvents.filter(event=>event.type==='playing'));
-  expect(playing).toEqual([]);
+  await expectStaticHero(elements);
+  await expect(play).toBeVisible();
+  await expect(play).toHaveText(/Reproducir vídeo/);
+  const rejections=await page.evaluate(()=>window.autoplayRejections);
+
+  await play.tap();
+  await expectPlaying(video,INTRO);
+  await expectNoPlaybackControls(elements);
+  await expect.poll(()=>video.getAttribute('src'),{timeout:10000}).toBe(LOOP);
+  await expectPlaying(video,LOOP);
+  await expectNoPlaybackControls(elements);
+  expect(await page.evaluate(()=>window.autoplayRejections)).toBe(rejections);
+  expect(await page.evaluate(()=>window.heroMediaEvents.some(event=>event.type==='ended'&&event.source==='/edg-intro.mp4'&&event.trusted))).toBe(true);
 });
