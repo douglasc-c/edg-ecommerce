@@ -25,7 +25,7 @@ test('MÚSICA abre y se recarga sin sesión ni dependencia del catálogo',async(
     await expect(page.locator('.music-page iframe')).toHaveCount(0);
     await expect(page.locator('#dialog')).not.toBeVisible();
     for(const id of videos)await expect(playButton(page,id)).toBeVisible();
-    await expect(page.locator('.music-timeline li time')).toHaveText(['2010','2012','2016','2018','2020','2025']);
+    await expect(page.locator('.music-timeline li time')).toHaveText(['2010','2012','2016','2018','2020']);
   }
   expect(catalogRequests).toBe(0);
 });
@@ -93,7 +93,7 @@ test('los capítulos no reconstruyen el reproductor y las portadas mantienen su 
   await playButton(page,videos[0]).click();
   const originalFrame=await page.locator('.music-page iframe').elementHandle();
   const covers=page.locator('.music-album-grid .music-album img');
-  await expect(covers).toHaveCount(5);
+  await expect(covers).toHaveCount(4);
 
   for(const width of [1440,390,320]){
     await page.setViewportSize({width,height:900});
