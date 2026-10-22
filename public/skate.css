@@ -133,3 +133,13 @@ html.store-menu-visible{overflow:hidden}
 .skate-closing .eyebrow{margin-bottom:18px}
 .skate-closing p{margin-top:16px;color:#bbb;font-size:13px}
 .store-header .toplinks a[aria-current="page"]{text-decoration:underline;text-underline-offset:6px}
+
+/* Compact photo banner for SKATE only; text can grow with browser zoom. */
+.skate-page:not(.music-page)>.skate-hero{min-height:120px;padding:12px 5vw;align-items:center}
+.skate-page:not(.music-page)>.skate-hero .skate-hero-image{object-position:50% 25%}
+.skate-page:not(.music-page)>.skate-hero .skate-hero-copy h1{font-size:44px;line-height:1;margin:4px 0;letter-spacing:-1px}
+.skate-page:not(.music-page)>.skate-hero .skate-hero-copy p{font-size:12px;line-height:1.5}
+@media(max-width:760px){
+  .skate-page:not(.music-page)>.skate-hero{padding-inline:20px}
+  .skate-page:not(.music-page)>.skate-hero .skate-hero-image{object-position:50% 30%}
+}
