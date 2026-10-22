@@ -51,6 +51,11 @@ function bindSkateNavigation(){
   if(menu){
     const closed=()=>{document.documentElement.classList.remove('store-menu-visible');document.querySelector('.store-menu-open')?.setAttribute('aria-expanded','false');};
     menu.addEventListener('close',closed,options);
+    matchMedia('(max-width:1000px)').addEventListener('change',event=>{
+      if(event.matches||!menu.open)return;
+      menu.close();
+      document.querySelector('.store-header .toplinks a[href="#store"]')?.focus({preventScroll:true});
+    },options);
     menu.addEventListener('click',event=>{
       if(event.target.closest('a')){menu.close();if(event.target.closest('a').hash===location.hash)window.scrollTo({top:0,behavior:'auto'});}
       if(event.target===menu){const r=menu.getBoundingClientRect();if(event.clientX<r.left||event.clientX>r.right||event.clientY<r.top||event.clientY>r.bottom)menu.close();}
