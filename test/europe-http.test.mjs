@@ -7,8 +7,8 @@ import { createApp, configuration } from '../src/server.mjs';
 import { HttpError, hash, now } from '../src/security.mjs';
 
 const base='/api/admin/europe-shipping';
-const destination={name:'Cliente de prueba',company_name:'',address:'Via Prueba',house_number:'10',
-  address_2:'',postal_code:'20121',city:'Milano',country_code:'IT',state_province_code:'IT-MI',email:'customer@example.test',telephone:'+390200000000'};
+const destination={name:'Cliente de prueba',company_name:'',address:'Calle Prueba',house_number:'10',
+  address_2:'',postal_code:'28001',city:'Madrid',country_code:'ES',state_province_code:'ES-M',email:'customer@example.test',telephone:'+34910000000'};
 const parcel={weight:1.8,width:25,height:12,length:90};
 
 function fixture(t,environment='test') {
@@ -24,12 +24,12 @@ function fixture(t,environment='test') {
     db.prepare('INSERT INTO sessions VALUES(?,?,?,?)').run(hash(raw),id,csrf,new Date(Date.now()+60000).toISOString());
     users[role]={cookie:`edg_session=${raw}`,'x-csrf-token':csrf};
   }
-  const counts={created:0,labels:0,retrieved:0};
+  const counts={quoted:0,created:0,labels:0,retrieved:0};
   const sender={id:1,name:'EDG Prueba',company_name:'EDG',address:'Calle Prueba',house_number:'1',
     address_2:'',postal_code:'08001',city:'Barcelona',country_code:'ES',email:'sender@example.test',telephone:'+34000000000'};
   const provider={
     async sender(){return sender;},
-    async quote(){return [{id:'eu-standard',name:'Estándar',carrier:'Prueba',price:1890,currency:'EUR',
+    async quote(){counts.quoted++;return [{id:'eu-standard',name:'Estándar',carrier:'Prueba',price:1890,currency:'EUR',
       days:4,shipping_option_code:'fixture:standard',contract_id:1}];},
     async create(){counts.created++;return {shipment_id:'shipment-fixture',parcel_id:'parcel-fixture',
       tracking_code:'TRACK-TEST',tracking_url:'https://example.test/track',status:'label_created',occurred_at:now()};},
@@ -69,9 +69,21 @@ test('HTTP europeo: catálogo EUR mantiene el checkout cerrado y publica solo co
   assert.equal((await f.call('/api/checkout',{method:'POST',body:{}})).status,503);
   const status=await f.call(base+'/status',{headers:f.users.admin});
   assert.equal(status.status,200);assert.equal(status.data.environment,'test');
-  assert.deepEqual(status.data.countries.map(c=>c.code).sort(),['DE','ES','IT','PT']);
+  assert.deepEqual(status.data.countries.map(c=>c.code),['ES']);
   assert.ok(!JSON.stringify([result.data,status.data]).includes('fixture-private'));
   assert.ok(!JSON.stringify([result.data,status.data]).includes('fixture-webhook'));
+});
+
+test('HTTP europeo: solo cotiza Península y Baleares y rechaza rutas internacionales antes del proveedor',async t=>{
+  const f=fixture(t),headers=f.users.shipping;
+  for(const change of [{country_code:'DE',postal_code:'10115'},{country_code:'IT',postal_code:'20121',state_province_code:'IT-MI'},{country_code:'PT',postal_code:'1234-567'},...['35001','38001','51001','52001'].map(postal_code=>({postal_code}))]) {
+    const result=await f.call(base+'/quote',{method:'POST',headers,body:{destination:{...destination,...change},parcel}});
+    assert.equal(result.status,400,JSON.stringify(result.data));
+  }
+  assert.equal(f.counts.quoted,0);
+  const result=await f.call(base+'/quote',{method:'POST',headers,body:{destination:{...destination,postal_code:'07001',city:'Palma',state_province_code:'ES-PM'},parcel}});
+  assert.equal(result.status,200,JSON.stringify(result.data));assert.equal(f.counts.quoted,1);
+  assert.equal(result.data.destination.country_code,'ES');assert.equal(result.data.destination.postal_code,'07001');
 });
 
 test('HTTP europeo: sesión, permiso de expedición, origen y CSRF protegen todos los envíos',async t=>{

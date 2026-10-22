@@ -1,6 +1,6 @@
 import {test,expect} from '@playwright/test';
 
-const countries=[{code:'ES',name:'España (Península y Baleares)'},{code:'DE',name:'Alemania'},{code:'IT',name:'Italia'},{code:'PT',name:'Portugal'}];
+const countries=[{code:'ES',name:'España (Península y Baleares)'}];
 async function europeFixture(page,{environment='test',configured=true,creationStatus,provider='sendcloud'}={}){
   const calls={quotes:[],creates:[],checks:0,syncs:0};const rows=[];
   const status={provider:'sendcloud',environment,configured,missing:configured?[]:['SENDCLOUD_PUBLIC_KEY','SENDCLOUD_SECRET_KEY'],origin:{city:'Barcelona',country_code:'ES'},countries,webhook_url:'https://store.example.com/api/webhooks/sendcloud',checkout_enabled:false};
@@ -28,8 +28,8 @@ async function europeFixture(page,{environment='test',configured=true,creationSt
 }
 async function fillShipment(page){
   const form=page.locator('#eu-shipping-form');
-  for(const [name,value] of Object.entries({name:'Cliente Europa',email:'customer@example.com',telephone:'+493012345678',address:'Musterstraße',house_number:'12',postal_code:'10115',city:'Berlín',state_province_code:'DE-BE',weight:'1.25',length:'90',width:'25',height:'12',order_reference:'PED-EU-100'}))await form.locator(`[name="${name}"]`).fill(value);
-  await form.locator('[name="country_code"]').selectOption('DE');
+  for(const [name,value] of Object.entries({name:'Cliente Europa',email:'customer@example.com',telephone:'+34931234567',address:'Carrer de Mallorca',house_number:'12',postal_code:'08001',city:'Barcelona',state_province_code:'ES-B',weight:'1.25',length:'90',width:'25',height:'12',order_reference:'PED-EU-100'}))await form.locator(`[name="${name}"]`).fill(value);
+  await form.locator('[name="country_code"]').selectOption('ES');
 }
 
 test('envío europeo de prueba: paquete real, tarifa invalidada al editar y simulación sin etiqueta',async({page},testInfo)=>{
@@ -39,12 +39,16 @@ test('envío europeo de prueba: paquete real, tarifa invalidada al editar y simu
   await expect(page.getByRole('heading',{name:'Envíos europeos',exact:true})).toBeVisible();
   await expect(page.getByText('MODO DE PRUEBAS · simulación local',{exact:true})).toBeVisible();
   await expect(page.locator('#eu-shipping-form [name="weight"]')).toHaveValue('');await expect(page.getByLabel('Provincia (código ISO, si se requiere)',{exact:true})).toHaveValue('');
-  await page.locator('#eu-shipping-form [name="country_code"]').selectOption('IT');await expect(page.getByLabel('Provincia (código ISO, obligatorio en Italia)',{exact:true})).toHaveAttribute('required','');await page.locator('#eu-shipping-form [name="country_code"]').selectOption('DE');await expect(page.getByLabel('Provincia (código ISO, si se requiere)',{exact:true})).not.toHaveAttribute('required','');
+  await expect(page.getByText('Envíos nacionales desde Barcelona a la Península y Baleares.',{exact:true})).toBeVisible();
+  await expect(page.locator('#eu-shipping-form [name="country_code"] option')).toHaveText(['España (Península y Baleares)']);
+  await expect(page.locator('#eu-shipping-form [name="country_code"]')).toHaveValue('ES');
+  await expect(page.getByLabel('Provincia (código ISO, si se requiere)',{exact:true})).not.toHaveAttribute('required','');
+  await expect(page.getByLabel('Provincia (código ISO, si se requiere)',{exact:true})).toHaveAttribute('placeholder','p. ej., ES-B');
   await page.getByRole('button',{name:'Comprobar conexión'}).click();await expect(page.locator('#eu-connection-result')).toContainText('No se ha contratado ningún envío.');
   await fillShipment(page);await page.getByRole('button',{name:'Consultar tarifas',exact:true}).click();
   await expect(page.locator('#eu-quote-results')).toContainText('9,95');
   await expect(page.locator('#eu-quote-results')).toContainText('Plazo no facilitado');
-  expect(calls.quotes[0]).toMatchObject({destination:{country_code:'DE',postal_code:'10115',house_number:'12',state_province_code:'DE-BE'},parcel:{weight:1.25,length:90,width:25,height:12}});
+  expect(calls.quotes[0]).toMatchObject({destination:{country_code:'ES',postal_code:'08001',house_number:'12',state_province_code:'ES-B'},parcel:{weight:1.25,length:90,width:25,height:12}});
   await page.locator('#eu-shipping-form [name="weight"]').fill('1.5');
   await expect(page.getByRole('button',{name:'Simular envío',exact:true})).toHaveCount(0);
   await page.getByRole('button',{name:'Consultar tarifas',exact:true}).click();

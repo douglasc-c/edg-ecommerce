@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { HttpError, requireThat, text, email, hash, now, safeLink } from './security.mjs';
 import { transaction } from './db.mjs';
 
-const countries = [{ code: 'ES', name: 'España (Península y Baleares)' }, { code: 'DE', name: 'Alemania' }, { code: 'IT', name: 'Italia' }, { code: 'PT', name: 'Portugal' }];
+const countries = [{ code: 'ES', name: 'España (Península y Baleares)' }];
 const messages = {
   submitting: 'Solicitud de envío en curso.', unknown: 'Resultado pendiente de conciliación con Sendcloud.',
   simulated: 'Simulación local, sin etiqueta ni transporte real.', label_created: 'Etiqueta creada; pendiente de entrega al transportista.',
@@ -23,20 +23,14 @@ function optional(value, label, max = 150) { return value === undefined || value
 function destination(input) {
   requireThat(object(input), 400, 'Introduce la dirección del destinatario.');
   const country = field(input.country_code, 'País', 2, 2).toUpperCase();
-  requireThat(countries.some(item => item.code === country), 400, 'Solo se admiten destinos en España, Alemania, Italia y Portugal.');
-  let postal = field(input.postal_code, 'Código postal', 5, 8);
-  if (country === 'PT') {
-    requireThat(/^\d{4}-?\d{3}$/.test(postal), 400, 'Portugal: utiliza un código postal de siete dígitos (1234-567).');
-    postal = postal.replace(/^(\d{4})-?(\d{3})$/, '$1-$2');
-  } else {
-    requireThat(/^\d{5}$/.test(postal), 400, 'El código postal debe contener cinco dígitos.');
-    if (country === 'ES') requireThat(!/^(35|38|51|52)/.test(postal), 400, 'En España solo se admiten la Península y Baleares. Canarias, Ceuta y Melilla requieren una ruta aduanera específica.');
-  }
+  requireThat(country === 'ES', 400, 'Solo se admiten destinos en España (Península y Baleares).');
+  const postal = field(input.postal_code, 'Código postal', 5, 5);
+  requireThat(/^\d{5}$/.test(postal), 400, 'El código postal debe contener cinco dígitos.');
+  requireThat(!/^(35|38|51|52)/.test(postal), 400, 'En España solo se admiten la Península y Baleares. Canarias, Ceuta y Melilla requieren una ruta aduanera específica.');
   const telephone = field(input.telephone, 'Teléfono', 7, 30);
   requireThat(/^\+?[\d ()-]+$/.test(telephone) && /^\d{7,15}$/.test(telephone.replace(/\D/g, '')), 400, 'Introduce un teléfono válido, con prefijo internacional.');
   const province = optional(input.state_province_code, 'Código de provincia', 30).toUpperCase();
-  requireThat(country !== 'IT' || province, 400, 'Para Italia es obligatorio indicar el código ISO de la provincia (por ejemplo, IT-RM).');
-  if (province) requireThat(new RegExp(`^${country}-[A-Z0-9]{1,6}$`).test(province), 400, 'Introduce el código ISO de la provincia del país de destino (por ejemplo, IT-RM).');
+  if (province) requireThat(/^ES-[A-Z0-9]{1,6}$/.test(province), 400, 'Introduce el código ISO de la provincia española (por ejemplo, ES-M).');
   return {
     name: field(input.name, 'Nombre', 2, 100), company_name: optional(input.company_name, 'Empresa', 100),
     address: field(input.address, 'Calle', 2, 150), house_number: field(input.house_number, 'Número', 1, 25),
@@ -160,6 +154,8 @@ export function europeShipping(db, config, provider) {
       requireThat(quote.expires_at > now(), 409, 'La cotización ha caducado. Solicita una nueva tarifa.');
       const payload = JSON.parse(quote.payload); requireThat(payload.environment === environment, 409, 'El entorno de la cotización no coincide.');
       requireThat(String(payload.sender.id) === String(settings.senderAddressId), 409, 'El remitente ha cambiado. Solicita una nueva cotización.');
+      // Las cotizaciones anteriores también deben respetar el alcance vigente antes de crear un envío nuevo.
+      payload.destination = destination(payload.destination);
       const option = JSON.parse(quote.options).find(item => item.id === serviceId); requireThat(option, 400, 'Selecciona un servicio de la cotización.');
       const id = randomUUID(), reference = `edg-eu-${id}`, created = now(), state = environment === 'test' ? 'simulated' : 'submitting';
       // Se persiste antes de toda llamada de creación: ni reintentos ni claves nuevas pueden comprar una segunda etiqueta para la misma cotización.

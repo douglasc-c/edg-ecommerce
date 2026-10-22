@@ -5,7 +5,7 @@ import { database } from '../src/db.mjs';
 import { europeShipping } from '../src/europe-shipping.mjs';
 import { HttpError, now } from '../src/security.mjs';
 
-const address = { name: 'Cliente de prueba', company_name: '', address: 'Hauptstraße', house_number: '10', address_2: '', postal_code: '10115', city: 'Berlin', country_code: 'DE', email: 'cliente@example.com', telephone: '+49 3012345678' };
+const address = { name: 'Cliente de prueba', company_name: '', address: 'Calle de prueba', house_number: '10', address_2: '', postal_code: '28001', city: 'Madrid', country_code: 'ES', email: 'cliente@example.com', telephone: '+34 910123456' };
 const box = { weight: 2.4, width: 25, height: 15, length: 85 };
 const sender = { id: 123, name: 'EDG', address: 'Carrer de prova', house_number: '1', city: 'BÁRCELONA', postal_code: '08001', country_code: 'ES' };
 const option = { id: 'test:home|', name: 'Entrega a domicilio', carrier: 'Transportista de prueba', price: 1295, currency: 'EUR', days: 4, shipping_option_code: 'test:home', contract_id: null };
@@ -34,7 +34,7 @@ const create = (f, q, changes = {}, key = randomUUID()) => f.service.create(f.us
 test('la configuración no revela claves y el remitente se valida mediante una consulta de solo lectura', async t => {
   const f = fixture(t), status = f.service.status();
   assert.equal(status.configured, true); assert.equal(status.checkout_enabled, false);
-  assert.deepEqual(status.countries.map(c => c.code), ['ES', 'DE', 'IT', 'PT']);
+  assert.deepEqual(status.countries.map(c => c.code), ['ES']);
   assert.equal(status.webhook_url, 'https://example.com/api/webhooks/sendcloud');
   assert.ok(!JSON.stringify(status).includes('fixture'));
   assert.equal((await f.service.checkConnection()).sender.postal_code, '08001');
@@ -46,15 +46,42 @@ test('la configuración no revela claves y el remitente se valida mediante una c
 
 test('los países, códigos postales y medidas se validan antes de consultar tarifas', async t => {
   const f = fixture(t);
-  for (const change of [{ country_code: 'FR' }, { postal_code: '1011' }, { country_code: 'IT', postal_code: 'abcde' }, { country_code: 'ES', postal_code: '35001' }, { country_code: 'ES', postal_code: '38001' }, { country_code: 'ES', postal_code: '51001' }, { country_code: 'ES', postal_code: '52001' }, { country_code: 'PT', postal_code: '12345' }]) await assert.rejects(quote(f, change), error => error.status === 400);
+  for (const change of [{ country_code: 'FR' }, { country_code: 'DE', postal_code: '10115' }, { country_code: 'IT', postal_code: '20121', state_province_code: 'IT-MI' }, { country_code: 'PT', postal_code: '1234-567' }, { postal_code: '1011' }, { postal_code: 'abcde' }, { postal_code: '35001' }, { postal_code: '38001' }, { postal_code: '51001' }, { postal_code: '52001' }]) await assert.rejects(quote(f, change), error => error.status === 400);
   for (const parcel of [{ ...box, weight: 0 }, { ...box, width: 0 }, { ...box, length: 301 }, { ...box, height: '15' }, { ...box, weight: Infinity }, { weight: 1 }]) await assert.rejects(f.service.quote(f.user, { destination: address, parcel }), error => error.status === 400);
-  for (const change of [{ email: 'bad-email' }, { telephone: 'not a number' }, { city: 'Berlin\nInjected' }, { house_number: '' }]) await assert.rejects(quote(f, change), error => error.status === 400);
-  await assert.rejects(quote(f, { country_code: 'IT', postal_code: '20121' }), error => error.status === 400 && /provincia/.test(error.message));
+  for (const change of [{ email: 'bad-email' }, { telephone: 'not a number' }, { city: 'Madrid\nInjected' }, { house_number: '' }, { state_province_code: 'IT-RM' }]) await assert.rejects(quote(f, change), error => error.status === 400);
   assert.equal(f.calls.quote, 0); assert.equal(f.calls.sender, 0);
-  assert.equal((await quote(f, { country_code: 'PT', postal_code: '1234567' })).destination.postal_code, '1234-567');
-  assert.equal((await quote(f, { country_code: 'ES', postal_code: '07001' })).destination.country_code, 'ES');
-  assert.equal((await quote(f, { country_code: 'IT', postal_code: '00186', state_province_code: 'it-rm' })).destination.state_province_code, 'IT-RM');
-  await assert.rejects(quote(f, { state_province_code: 'IT-RM' }), /provincia/);
+  assert.equal((await quote(f)).destination.postal_code, '28001');
+  assert.equal((await quote(f, { postal_code: '07001', city: 'Palma' })).destination.country_code, 'ES');
+  assert.equal((await quote(f, { state_province_code: 'es-m' })).destination.state_province_code, 'ES-M');
+});
+
+test('las cotizaciones anteriores fuera del alcance no pueden crear simulaciones ni etiquetas reales', async t => {
+  for (const environment of ['test', 'live']) {
+    const f = fixture(t, environment);
+    for (const change of [{ country_code: 'DE', postal_code: '10115' }, { country_code: 'IT', postal_code: '20121', state_province_code: 'IT-MI' }, { country_code: 'PT', postal_code: '1234-567' }, ...['35001', '38001', '51001', '52001'].map(postal_code => ({ postal_code }))]) {
+      const q = await quote(f), stored = f.db.prepare('SELECT payload FROM europe_quotes WHERE id=?').get(q.id), payload = JSON.parse(stored.payload);
+      payload.destination = { ...payload.destination, ...change };
+      f.db.prepare('UPDATE europe_quotes SET payload=? WHERE id=?').run(JSON.stringify(payload), q.id);
+      await assert.rejects(create(f, q), error => error.status === 400 && /Península y Baleares/.test(error.message));
+    }
+    assert.equal(f.calls.create, 0);
+    assert.equal(f.db.prepare('SELECT COUNT(*) n FROM europe_shipments').get().n, 0);
+  }
+});
+
+test('los envíos internacionales anteriores siguen disponibles para consulta, seguimiento y descarga', async t => {
+  for (const country_code of ['DE', 'IT', 'PT']) {
+    const f = fixture(t, 'live'), q = await quote(f), key = randomUUID(), shipment = await create(f, q, {}, key);
+    const legacyDestination = { ...shipment.destination, country_code };
+    f.db.prepare('UPDATE europe_shipments SET destination=? WHERE id=?').run(JSON.stringify(legacyDestination), shipment.id);
+    assert.equal(f.service.get(shipment.id).destination.country_code, country_code);
+    assert.equal(f.service.list()[0].destination.country_code, country_code);
+    f.setReceipt({ shipment_id: shipment.provider_shipment_id, parcel_id: shipment.provider_parcel_id, status: 'in_transit', event_at: '2026-10-17T10:00:00Z' });
+    assert.equal((await f.service.sync(f.user, shipment.id)).status, 'in_transit');
+    assert.equal((await f.service.download(shipment.id)).toString(), '%PDF-fixture');
+    assert.equal((await create(f, q, {}, key)).id, shipment.id);
+    assert.deepEqual([f.calls.create, f.calls.retrieve, f.calls.label], [1, 1, 1]);
+  }
 });
 
 test('un origen fuera de Barcelona no puede cotizar ni marcarse listo', async t => {

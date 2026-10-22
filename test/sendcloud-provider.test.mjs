@@ -6,7 +6,7 @@ import { sendcloudProvider } from '../src/sendcloud.mjs';
 const BASE='https://panel.sendcloud.sc/api/v3';
 const config={sendcloud:{environment:'live',publicKey:'public-example',secretKey:'secret-example',webhookSecret:'signature-example',senderAddressId:17}};
 const sender={id:17,name:'Equipo EDG',company_name:'EDG',address:'Carrer de Mallorca',house_number:'10',address_2:'Almacén',postal_code:'08001',city:'Barcelona',country_code:'ES',email:'warehouse@example.test',telephone:'+34930000000'};
-const destination={name:'Cliente de prueba',address:'Hauptstrasse',house_number:'20',postal_code:'10115',city:'Berlin',country_code:'DE',email:'buyer@example.test',telephone:'+49300000000'};
+const destination={name:'Cliente de prueba',address:'Calle Mayor',house_number:'20',postal_code:'28001',city:'Madrid',country_code:'ES',email:'buyer@example.test',telephone:'+34910000000'};
 const parcel={weight:2.4,width:25,height:12,length:85};
 const option={id:'dhl:parcel|44',name:'DHL Parcel',carrier:'DHL',price:890,currency:'EUR',days:2,shipping_option_code:'dhl:parcel',contract_id:44};
 const shipment=(overrides={})=>({id:'shipment-uuid',external_reference_id:'edg-shipping-123',parcels:[{id:500,tracking_number:'TRACK-123',tracking_url:'https://tracking.example.test/TRACK-123',status:{code:'READY_TO_SEND'},updated_at:'2026-10-16T10:00:00Z',documents:[{document_type:'label',link:'http://127.0.0.1/private'}]}],...overrides});
@@ -40,7 +40,7 @@ test('cotiza con objetos de dirección y bulto completo mediante shipping-option
   assert.deepEqual(options,[option]);
   const body=JSON.parse(m.calls[0].init.body);
   assert.deepEqual(body.parcels,[{weight:{value:'2.4',unit:'kg'},dimensions:{width:'25',height:'12',length:'85',unit:'cm'}}]);
-  assert.equal(body.from_address.country_code,'ES');assert.equal(body.to_address.country_code,'DE');assert.equal(body.to_address.address_line_1,'Hauptstrasse 20');assert.equal(body.calculate_quotes,true);
+  assert.equal(body.from_address.country_code,'ES');assert.equal(body.to_address.country_code,'ES');assert.equal(body.to_address.address_line_1,'Calle Mayor 20');assert.equal(body.calculate_quotes,true);
   assert.equal(body.to_country_code,undefined);assert.equal(body.weight,undefined);m.done();
 });
 
@@ -59,9 +59,18 @@ test('selecciona bandas aplicables al peso facturado y no infracotiza bandas sol
 
 test('valida países, medidas y credenciales antes de llamar a la red',async()=>{
   const api=sendcloudProvider(config,()=>{assert.fail('No debe llamar a la red.');});
-  await assert.rejects(api.quote({sender,destination:{...destination,country_code:'FR'},parcel}),{status:400});
+  for(const change of [{country_code:'FR'},{country_code:'DE',postal_code:'10115'},{country_code:'IT',postal_code:'20121',state_province_code:'IT-MI'},{country_code:'PT',postal_code:'1234-567'},...['35001','38001','51001','52001','2800','abcde'].map(postal_code=>({postal_code}))]) {
+    await assert.rejects(api.quote({sender,destination:{...destination,...change},parcel}),{status:400});
+    await assert.rejects(api.create({reference:'edg-shipping-123',sender,destination:{...destination,...change},parcel,option}),{status:400});
+  }
   await assert.rejects(api.quote({sender,destination,parcel:{...parcel,weight:0}}),{status:400});
   await assert.rejects(sendcloudProvider({sendcloud:{senderAddressId:17}},()=>assert.fail('No debe llamar a la red.')).sender(),{status:503});
+});
+
+test('cotiza Baleares como destino nacional y transmite su código postal completo',async()=>{
+  const m=mock([{path:'/shipping-options',method:'POST',result:json({data:[]})}]);
+  assert.deepEqual(await sendcloudProvider(config,m.fetcher).quote({sender,destination:{...destination,postal_code:'07001',city:'Palma'},parcel}),[]);
+  const body=JSON.parse(m.calls[0].init.body);assert.equal(body.to_address.country_code,'ES');assert.equal(body.to_address.postal_code,'07001');m.done();
 });
 
 test('el modo test nunca crea etiquetas reales, tampoco sendcloud:letter',async()=>{
