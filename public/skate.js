@@ -13,8 +13,8 @@ const skateArchive=[
   {id:'pPkbqw8Sb5M',title:'Pop Tha Box · Brian Rozniski vs Adriel Parmisano',source:'EDG Skateboards',date:'2024',category:'Game of Skate'},
 ];
 const skateVideoUrl=id=>`https://www.youtube.com/watch?v=${id}`;
-function skatePoster(film){return `<button type="button" class="skate-play" data-action="play-skate" data-id="${film.id}" aria-label="Reproducir ${escape(film.title)}"><img src="https://i.ytimg.com/vi/${film.id}/hqdefault.jpg" width="480" height="360" alt="" data-video-thumbnail loading="lazy" decoding="async"><span class="skate-play-icon" aria-hidden="true">▶</span><span class="skate-play-label">Ver vídeo</span></button>`;}
-function skateFilm(film,index,{archive=false}={}){return `<article class="skate-film"${archive&&index>=3?' hidden data-skate-extra':''}><div class="skate-player-shell" data-video-id="${film.id}">${skatePoster(film)}</div><div class="skate-film-meta"><span class="eyebrow">${archive?`${escape(film.category)} / ${film.date}`:`Destacado / 0${index+1}`}</span><h3>${escape(film.title)}</h3><p>${escape(film.description||film.source)}</p><a class="skate-text-link" href="${skateVideoUrl(film.id)}" target="_blank" rel="noopener noreferrer">Ver en YouTube ↗</a></div></article>`;}
+function skatePoster(film,action='play-skate'){return `<button type="button" class="skate-play" data-action="${action}" data-id="${film.id}" aria-label="Reproducir ${escape(film.title)}"><img src="${film.poster||`https://i.ytimg.com/vi/${film.id}/hqdefault.jpg`}" width="480" height="360" alt="" data-video-thumbnail loading="lazy" decoding="async"><span class="skate-play-icon" aria-hidden="true">▶</span><span class="skate-play-label">Ver vídeo</span></button>`;}
+function skateFilm(film,index,{archive=false,action='play-skate'}={}){return `<article class="skate-film"${archive&&index>=3?' hidden data-skate-extra':''}><div class="skate-player-shell" data-video-id="${film.id}">${skatePoster(film,action)}</div><div class="skate-film-meta"><span class="eyebrow">${archive?`${escape(film.category)} / ${film.date}`:`Destacado / 0${index+1}`}</span><h3>${escape(film.title)}</h3><p>${escape(film.description||film.source)}</p><a class="skate-text-link" href="${skateVideoUrl(film.id)}" target="_blank" rel="noopener noreferrer">Ver en YouTube ↗</a></div></article>`;}
 function skatePage(){return storeShell(`<div class="skate-page">
   <section class="skate-hero" aria-labelledby="skate-title"><img class="skate-hero-image" src="/edg-skate-campaign-1600.webp" srcset="/edg-skate-campaign-960.webp 960w, /edg-skate-campaign-1600.webp 1600w" sizes="100vw" width="1600" height="1600" alt="Skate en las calles de Barcelona." fetchpriority="high"><div class="skate-hero-copy"><span class="eyebrow">Original . Barcelona</span><h1 id="skate-title" tabindex="-1">SKATE</h1><p>Nuestra historia se escribe en la calle.</p></div></section>
   <nav class="skate-section-nav" aria-label="Secciones de SKATE">${[['destacados','Destacados'],['historia','Historia'],['equipo','Equipo'],['archivo','Archivo']].map(([id,label])=>`<a href="#skate" data-action="skate-jump" data-section="${id}">${label}</a>`).join('')}</nav>
@@ -24,13 +24,13 @@ function skatePage(){return storeShell(`<div class="skate-page">
   <section id="skate-archivo" class="skate-section" aria-labelledby="skate-archive-title"><div class="skate-section-head"><span class="eyebrow">Desde el canal oficial</span><h2 id="skate-archive-title" tabindex="-1">ARCHIVO EDG.</h2><p>Tours, sesiones, música y encuentros. Más capítulos de nuestra historia.</p></div><div id="skate-archive-grid" class="skate-archive-grid">${skateArchive.map((film,i)=>skateFilm(film,i,{archive:true})).join('')}</div><div class="skate-more"><button class="btn" type="button" data-action="skate-more" aria-controls="skate-archive-grid" aria-expanded="false">Ver más vídeos</button><a class="skate-text-link" href="${skateChannel}/videos" target="_blank" rel="noopener noreferrer">Todo el archivo en YouTube ↗</a></div></section>
   <section class="skate-section skate-closing"><div><span class="eyebrow">EDG Skateboards</span><h2>LA HISTORIA SIGUE.</h2><p>Sigue el canal o encuentra tu próxima tabla.</p></div><div class="stack"><a class="btn" href="${skateChannel}" target="_blank" rel="noopener noreferrer">Ver el canal ↗</a><a class="btn" href="#catalog">Explorar los shapes ↗</a></div></section>
 </div>`);}
-function playSkateFilm(button){
-  const film=[...skateFeatured,...skateArchive].find(item=>item.id===button.dataset.id);
+function playSkateFilm(button,films=[...skateFeatured,...skateArchive],action='play-skate'){
+  const film=films.find(item=>item.id===button.dataset.id);
   const shell=button.closest('.skate-player-shell');if(!film||!shell)return;
   // Replacing the previous iframe stops its media without loading the YouTube JS API.
   document.querySelectorAll('.skate-player-shell iframe').forEach(frame=>{
-    const old=[...skateFeatured,...skateArchive].find(item=>item.id===frame.parentElement.dataset.videoId);
-    if(old)frame.parentElement.innerHTML=skatePoster(old);
+    const old=films.find(item=>item.id===frame.parentElement.dataset.videoId);
+    if(old)frame.parentElement.innerHTML=skatePoster(old,action);
   });
   const frame=document.createElement('iframe');frame.src=`https://www.youtube-nocookie.com/embed/${film.id}?autoplay=1&playsinline=1&rel=0`;
   frame.title=film.title;frame.allow='autoplay; encrypted-media; picture-in-picture; fullscreen';frame.allowFullscreen=true;frame.referrerPolicy='strict-origin-when-cross-origin';
@@ -44,7 +44,7 @@ function jumpSkateSection(button){
 function skateStoreMenu(){
   const route=location.hash||'#store';
   const link=(href,label)=>`<a href="${href}"${route===href?' aria-current="page"':''}>${label}</a>`;
-  return `<dialog id="store-menu" class="store-menu" aria-labelledby="store-menu-title"><div class="store-menu-head"><span id="store-menu-title" class="eyebrow">EDG / Original . Barcelona</span><button class="store-menu-close" type="button" data-action="close-store-menu" aria-label="Cerrar menú">×</button></div><nav class="store-menu-links" aria-label="Menú principal">${link('#store','Inicio')}${link('#catalog','Colección')}${link('#skate','SKATE')}${link('#orders','Mis pedidos')}${has('dashboard')?link('#admin','Gestión'):''}</nav><p class="store-menu-caption">Skateboarding y cultura urbana.</p></dialog>`;
+  return `<dialog id="store-menu" class="store-menu" aria-labelledby="store-menu-title"><div class="store-menu-head"><span id="store-menu-title" class="eyebrow">EDG / Original . Barcelona</span><button class="store-menu-close" type="button" data-action="close-store-menu" aria-label="Cerrar menú">×</button></div><nav class="store-menu-links" aria-label="Menú principal">${link('#store','Inicio')}${link('#catalog','Colección')}${link('#skate','SKATE')}${link('#musica','MÚSICA')}${link('#orders','Mis pedidos')}${has('dashboard')?link('#admin','Gestión'):''}</nav><p class="store-menu-caption">Skateboarding y cultura urbana.</p></dialog>`;
 }
 function bindSkateNavigation(){
   const menu=document.getElementById('store-menu'),controller=new AbortController(),options={signal:controller.signal};

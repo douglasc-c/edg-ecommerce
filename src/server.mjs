@@ -228,6 +228,9 @@ export function createApp({db=database(),config=configuration(),provider=provide
       files['/loading.css']='loading.css';
       files['/skate.css']='skate.css';
       files['/skate.js']='skate.js';
+      files['/music.js']='music.js';
+      files['/music.css']='music.css';
+      for(const name of ['banda-hero','banda-hero-640','banda-live','rap-subterraneo','sobrenatural','mensageiro-do-corre','a-parada-e-o-movimento','achados-no-mundo-perdido','pratas-da-casa','aperta-o-play'])files[`/music/${name}.webp`]=`music/${name}.webp`;
       files['/edg-loading.js']='edg-loading.js';
       for(const id of ['g61','g99','63','121','197','221','240','257','15','19','28','47','55','92','101'])files[`/shape-${id}.webp`]=`shape-${id}.webp`;
       files['/edg-logo-tremor-loop.mp4']='edg-logo-tremor-loop.mp4';
