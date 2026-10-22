@@ -232,6 +232,7 @@ export function createApp({db=database(),config=configuration(),provider=provide
       files['/skate.css']='skate.css';
       files['/skate.js']='skate.js';
       files['/edg-skate-history-mosaic.webp']='edg-skate-history-mosaic.webp';
+      for(const width of [960,2160])files[`/edg-skate-history-barcelona-${width}.webp`]=`edg-skate-history-barcelona-${width}.webp`;
       files['/music.js']='music.js';
       files['/music.css']='music.css';
       for(const file of ['i18n.js','i18n-common.js','i18n-editorial.js'])files[`/${file}`]=file;
