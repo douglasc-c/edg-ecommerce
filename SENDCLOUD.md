@@ -2,7 +2,7 @@
 
 El módulo **Gestión → Envíos europeos** (`/#europe-shipping`) permite preparar envíos manuales desde el remitente de Barcelona, consultar tarifas, contratar una etiqueta y consultar su seguimiento. Tienen acceso los perfiles de administrador y expedición.
 
-El alcance inicial es un bulto por envío, desde Barcelona a España peninsular y Baleares (`ES`), Alemania (`DE`), Italia (`IT`) y Portugal (`PT`). No se admiten Canarias, Ceuta ni Melilla (códigos postales españoles que empiezan por `35`, `38`, `51` o `52`). Cada envío requiere el peso en kg y las tres medidas exteriores del bulto embalado en cm. No se deducen de un único producto.
+El alcance inicial es un bulto por envío, desde Barcelona a España peninsular y Baleares (`ES`). Los destinos internacionales quedan fuera del alcance inicial; los envíos internacionales ya registrados conservan su historial, seguimiento y descarga de etiqueta cuando esté disponible. No se admiten Canarias, Ceuta ni Melilla (códigos postales españoles que empiezan por `35`, `38`, `51` o `52`). Cada envío requiere el peso en kg y las tres medidas exteriores del bulto embalado en cm. No se deducen de un único producto.
 
 Este módulo no modifica el inventario, las reservas, los pagos ni los apuntes financieros. No habilita el carrito ni el pago en EUR: mantén `COMMERCE_MODE=catalog` mientras se prepara la integración europea de pagos. La facturación española también es independiente y sigue pendiente.
 
@@ -64,10 +64,10 @@ También puedes añadir los secretos en el Worker, en **Settings → Variables a
 
 1. Entra con un administrador o un usuario de expedición y abre **Gestión → Envíos europeos**.
 2. Pulsa **Comprobar conexión**. Revisa en Sendcloud la cuenta y el remitente configurados, y confirma que el origen sea Barcelona, `ES`.
-3. Rellena el destino con uno de los cuatro países admitidos. Introduce la dirección, el código postal y la ciudad con precisión. Para **Italia**, el campo **Provincia** es obligatorio y debe contener el código ISO completo; por ejemplo, `IT-MI` para Milán. Para los demás destinos es opcional, pero, si lo introduces, debe llevar el prefijo del país correspondiente.
+3. El país de destino está fijado a **España (Península y Baleares)**. Introduce la dirección, el código postal español de cinco dígitos y la ciudad con precisión. El campo **Provincia** es opcional; si lo introduces, utiliza el código ISO completo, por ejemplo `ES-B` para Barcelona.
 4. Pesa y mide el bulto exterior ya embalado. Introduce peso, largo, ancho y alto; no se admite omitir medidas ni añadir un segundo bulto.
 5. Pulsa **Consultar tarifas** y selecciona uno de los servicios devueltos. Revisa la moneda EUR y el importe que muestra el proveedor.
-6. Antes de simular o contratar, comprueba las consultas para un destino válido de cada país que vayas a utilizar: `ES`, `DE`, `IT` y `PT`. Estas consultas son de lectura: no pulses el botón de creación para verificar únicamente las tarifas. La consulta a Italia también comprueba que hayas indicado su provincia.
+6. Antes de simular o contratar, comprueba las consultas para un destino válido de la Península y otro de Baleares si vas a utilizar esa ruta. Estas consultas son de lectura: no pulses el botón de creación para verificar únicamente las tarifas. Comprueba también que se rechazan Canarias, Ceuta, Melilla y cualquier país distinto de `ES`. Las cotizaciones internacionales anteriores no permiten crear un envío nuevo.
 
 La consulta de remitentes y tarifas utiliza **la API real y las credenciales de tu cuenta**, incluso con `SENDCLOUD_ENVIRONMENT=test`. Consultar tarifas no crea un envío ni contrata una etiqueta. Una lista vacía puede indicar que faltan servicios activados o que no hay servicios compatibles con la ruta, el peso o las dimensiones. Si el contrato no tiene tarifas disponibles, no se inventa un precio.
 

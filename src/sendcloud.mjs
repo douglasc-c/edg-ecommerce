@@ -3,7 +3,6 @@ import { HttpError, requireThat, safeLink } from './security.mjs';
 
 // Contratos v3: https://sendcloud.dev/llms.txt. No se usa la API v2 ni Idempotency-Key.
 const BASE='https://panel.sendcloud.sc/api/v3';
-const COUNTRIES=new Set(['ES','DE','IT','PT']);
 const LABEL_STATUSES=new Set(['READY_TO_SEND','ANNOUNCED','LABELLED']);
 const MAX_PDF=10*1024*1024;
 function identifier(value,label,numeric=false) {
@@ -25,8 +24,11 @@ function timestamp(value) {return typeof value==='string' && Number.isFinite(Dat
 function apiAddress(input,{forQuote=false}={}) {
   requireThat(input && typeof input==='object',400,'Dirección de envío no válida.');
   const country=field(input.country_code,'País',2).toUpperCase();
-  requireThat(COUNTRIES.has(country),400,'El país de destino no está habilitado.');
-  const result={country_code:country,postal_code:field(input.postal_code,'Código postal',12),city:field(input.city,'Ciudad',100),address_line_1:field(input.address??input.street??input.address_line_1,'Dirección',200)};
+  requireThat(country==='ES',400,'Solo se admiten destinos en España (Península y Baleares).');
+  const postal=field(input.postal_code,'Código postal',5);
+  requireThat(/^\d{5}$/.test(postal),400,'El código postal debe contener cinco dígitos.');
+  requireThat(!/^(35|38|51|52)/.test(postal),400,'En España solo se admiten la Península y Baleares. Canarias, Ceuta y Melilla requieren una ruta aduanera específica.');
+  const result={country_code:country,postal_code:postal,city:field(input.city,'Ciudad',100),address_line_1:field(input.address??input.street??input.address_line_1,'Dirección',200)};
   const house=input.house_number??input.number;
   if(house)result[forQuote?'address_line_1':'house_number']=forQuote?`${result.address_line_1} ${field(String(house),'Número',30)}`:field(String(house),'Número',30);
   const province=input.state_province_code??input.state;

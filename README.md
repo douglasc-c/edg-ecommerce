@@ -4,7 +4,7 @@
 
 Tienda online y panel de operaciones integrados: catálogo, carrito persistente, proceso de compra, pedidos, inventario, finanzas, expedición y usuarios con permisos por función. Interfaz en español, inglés y portugués de Brasil, adaptable a móviles, con área de cliente y área de gestión.
 
-La traducción de la interfaz no cambia las integraciones fiscales: el módulo actual emite **NF-e brasileñas mediante Focus NFe**. La facturación española y el pago europeo siguen pendientes de integración. El módulo administrativo **Envíos europeos**, con Sendcloud, permite preparar envíos manuales desde Barcelona a España, Alemania, Italia y Portugal; consulta [SENDCLOUD.md](SENDCLOUD.md) para configurarlo primero en modo de prueba local.
+La traducción de la interfaz no cambia las integraciones fiscales: el módulo actual emite **NF-e brasileñas mediante Focus NFe**. La facturación española y el pago europeo siguen pendientes de integración. El módulo administrativo **Envíos europeos**, con Sendcloud, permite preparar envíos manuales desde Barcelona a España peninsular y Baleares; consulta [SENDCLOUD.md](SENDCLOUD.md) para configurarlo primero en modo de prueba local.
 
 ## Idiomas
 
@@ -123,7 +123,7 @@ Configura `SHIPPING_PROVIDER=sendcloud`, `SENDCLOUD_ENVIRONMENT=test`, las clave
 
 La contratación y la descarga de etiquetas reales requieren `SENDCLOUD_ENVIRONMENT=live`, credenciales válidas y confirmación expresa en la interfaz. El modo de Sendcloud es independiente de `COMMERCE_MODE`: este módulo funciona con el catálogo publicado y **no habilita las compras en EUR**. Los envíos manuales no modifican existencias, reservas, cobros ni apuntes financieros. La integración del envío con el futuro pago europeo es una etapa posterior.
 
-El alcance inicial es Barcelona → España peninsular y Baleares, Alemania, Italia y Portugal; quedan fuera Canarias, Ceuta y Melilla. Los servicios y los precios disponibles dependen de la cuenta, del contrato, del origen, del destino y de las medidas reales. El webhook `/api/webhooks/sendcloud` actualiza únicamente los envíos reales registrados en este módulo. Los detalles de configuración, prueba, producción y recuperación ante respuestas inciertas están en [SENDCLOUD.md](SENDCLOUD.md).
+El alcance inicial es Barcelona → España peninsular y Baleares; quedan fuera Canarias, Ceuta y Melilla. Los servicios y los precios disponibles dependen de la cuenta, del contrato, del origen, del destino y de las medidas reales. El webhook `/api/webhooks/sendcloud` actualiza únicamente los envíos reales registrados en este módulo. Los detalles de configuración, prueba, producción y recuperación ante respuestas inciertas están en [SENDCLOUD.md](SENDCLOUD.md).
 
 ## Pruebas
 

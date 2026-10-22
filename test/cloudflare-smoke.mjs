@@ -91,7 +91,7 @@ try{
   auth={Cookie:login.r.headers.get('set-cookie').split(';')[0],'X-CSRF-Token':login.data.csrf};
   result=await call('/api/admin/europe-shipping/status');assert.equal(result.r.status,200,JSON.stringify(result.data));
   assert.equal(result.data.provider,'sendcloud');assert.equal(result.data.environment,'test');assert.equal(result.data.configured,false);
-  assert.deepEqual(result.data.countries.map(country=>country.code).sort(),['DE','ES','IT','PT']);
+  assert.deepEqual(result.data.countries.map(country=>country.code).sort(),['ES']);
   assert.equal((await call('/api/admin/europe-shipping/check','POST')).r.status,503,'La cuenta pendiente no bloquea el catálogo');
   assert.equal((await call('/api/admin/europe-shipping/shipments')).data.length,0);
   assert.equal((await call('/api/admin/products','POST',{} ,{Origin:'https://other.example'})).r.status,403);
