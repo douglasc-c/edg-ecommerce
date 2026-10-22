@@ -1,0 +1,136 @@
+/* SKATE: an editorial extension of the EDG storefront. */
+.skate-page{background:#fff;color:#111;overflow:clip}
+.skate-page h1,.skate-page h2{font-family:Impact,'Arial Narrow',sans-serif;font-weight:900;text-transform:uppercase;line-height:.98;letter-spacing:-1px}
+.skate-page h2{font-size:clamp(34px,4.2vw,62px)}
+.skate-page h3{font-size:20px;line-height:1.2;letter-spacing:-.4px}
+.skate-page p{line-height:1.75}
+.skate-page .eyebrow{display:block;font-size:10px;letter-spacing:2px;line-height:1.5}
+.skate-page .btn{min-height:46px;border-radius:0;padding:14px 22px;text-transform:uppercase;font-size:10px;letter-spacing:1.2px}
+.skate-page :is(a,button):focus-visible{outline:2px solid currentColor;outline-offset:5px}
+.skate-hero{position:relative;isolation:isolate;min-height:420px;display:flex;align-items:flex-end;padding:52px 5vw;background:#101010;color:#fff}
+.skate-hero-image{position:absolute;inset:0;z-index:-2;width:100%;height:100%;object-fit:cover;object-position:50% 38%;opacity:.72}
+.skate-hero:after{content:"";position:absolute;inset:0;z-index:-1;background:linear-gradient(90deg,#000b 0,#0003 70%),linear-gradient(0deg,#0007,transparent 65%);pointer-events:none}
+.skate-hero-copy{max-width:600px}
+.skate-hero-copy h1{font-size:clamp(86px,12vw,172px);margin:14px 0 12px;letter-spacing:-3px}
+.skate-hero-copy p{max-width:430px;font-size:14px;color:#e5e5e5}
+.skate-section-nav{display:flex;gap:32px;align-items:center;overflow:auto;padding:0 5vw;border-bottom:1px solid #ddd;background:#fff;scrollbar-width:thin}
+.skate-section-nav a{display:flex;align-items:center;min-height:64px;flex-shrink:0;border-bottom:2px solid transparent;text-transform:uppercase;font-size:10px;font-weight:700;letter-spacing:1.2px;color:#626262}
+.skate-section-nav a:hover,.skate-section-nav a[aria-current]{border-bottom-color:#111;color:#111}
+.skate-section{padding:72px 5vw;scroll-margin-top:calc(var(--store-header-height,105px) + 24px)}
+.skate-section-head{display:flex;flex-direction:column;align-items:flex-start;gap:14px;margin-bottom:32px;max-width:700px}
+.skate-section-head p{max-width:540px;color:#626262;font-size:13px}
+.skate-featured-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:32px}
+.skate-film{min-width:0}
+.skate-player-shell{position:relative;aspect-ratio:16/9;min-height:200px;background:#171717;isolation:isolate;overflow:hidden}
+.skate-player-shell iframe{display:block;position:absolute;inset:0;width:100%;height:100%;border:0}
+.skate-play{position:absolute;inset:0;isolation:isolate;display:flex;align-items:center;justify-content:center;gap:12px;width:100%;height:100%;padding:0;border:0;border-radius:0;overflow:hidden;background:#191919;color:#fff}
+.skate-play img{position:absolute;inset:0;z-index:-2;width:100%;height:100%;object-fit:cover;transition:transform .4s ease}
+.skate-play:after{content:"";position:absolute;inset:0;z-index:-1;background:linear-gradient(0deg,#0007,transparent 70%);transition:background-color .2s ease}
+.skate-play-icon{display:grid;place-items:center;width:58px;height:58px;border:1px solid #ffffffb3;border-radius:50%;background:#0008;backdrop-filter:blur(4px);font-size:17px;padding-left:3px;transition:background-color .2s ease,transform .2s ease}
+.skate-play-label{position:absolute;left:22px;bottom:20px;text-transform:uppercase;font-size:10px;font-weight:700;letter-spacing:1.5px}
+.skate-film-meta{padding-top:20px}
+.skate-film-meta>.eyebrow{margin-bottom:9px;color:#6b6b6b;font-size:9px}
+.skate-film-kicker{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:10px;font-size:9px;line-height:1.5;letter-spacing:1.3px;text-transform:uppercase;color:#6b6b6b}
+.skate-film-meta h3{margin-bottom:10px;text-transform:uppercase}
+.skate-film-meta p{margin-bottom:15px;max-width:520px;font-size:12px;color:#626262}
+.skate-text-link{display:inline-flex;align-items:center;gap:8px;padding:4px 0;min-height:36px;border-bottom:1px solid #aaa;font-size:10px;font-weight:700;letter-spacing:1px;text-transform:uppercase}
+.skate-text-link:hover{border-bottom-color:currentColor}
+.skate-history{border-top:1px solid #e5e5e5;background:#f7f7f7}
+.skate-history-intro{display:grid;grid-template-columns:1fr 1fr;gap:7vw;align-items:start;margin-bottom:42px}
+.skate-history-intro h2{max-width:500px}
+.skate-history-intro p{max-width:540px;color:#555;font-size:14px}
+.skate-history-intro .eyebrow{margin-bottom:18px}
+.skate-chapters{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:32px}
+.skate-chapters article{border-top:1px solid #cfcfcf;padding-top:20px}
+.skate-chapter-number{display:block;font-size:10px;letter-spacing:2px;color:#737373;margin-bottom:24px}
+.skate-chapters h3{text-transform:uppercase;margin-bottom:12px;font-size:18px}
+.skate-chapters p{max-width:380px;color:#555;font-size:12px}
+.skate-history-photo{margin:46px 0 0;overflow:hidden;background:#ddd}
+.skate-history-photo img{display:block;width:100%;height:clamp(250px,36vw,510px);object-fit:cover;object-position:center}
+.skate-history-photo figcaption{padding-top:12px;font-size:10px;color:#666}
+.skate-team{background:#111;color:#fff}
+.skate-team .skate-section-head p{color:#b7b7b7}
+.skate-team-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:32px}
+.skate-rider{min-width:0;display:grid;grid-template-columns:1fr;border:1px solid #3a3a3a;background:#171717}
+.skate-rider-photo{display:block;aspect-ratio:16/9;width:100%;height:auto;object-fit:cover}
+.skate-rider-copy{padding:28px;align-self:center}
+.skate-rider-copy .eyebrow{font-size:9px;color:#b7b7b7;margin-bottom:15px}
+.skate-rider-copy h3{font-size:25px;text-transform:uppercase;letter-spacing:-.7px}
+.skate-rider-copy p{font-size:12px;color:#b7b7b7;margin:14px 0}
+.skate-rider-copy .skate-text-link{border-color:#777}
+.skate-archive-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:40px 24px}
+.skate-archive-grid .skate-film-meta h3{font-size:16px;letter-spacing:-.2px}
+.skate-archive-grid .skate-play-icon{width:48px;height:48px;font-size:14px}
+.skate-more{display:flex;justify-content:center;margin-top:40px}
+.skate-more .btn{background:#111;border-color:#111;color:#fff}
+.skate-more .btn:hover{background:#333}
+.skate-closing{display:flex;justify-content:space-between;gap:40px;align-items:center;background:#111;color:#fff;padding:64px 5vw}
+.skate-closing h2{max-width:620px;font-size:clamp(32px,4.2vw,58px)}
+.skate-closing>.stack{gap:12px;justify-content:flex-end}
+.skate-closing .btn{border-color:#555;background:transparent;color:#fff}
+.skate-closing .btn:first-child{background:#fff;border-color:#fff;color:#111}
+.skate-closing .btn:hover{background:#333;color:#fff}
+.store-menu-open{display:flex;align-items:center;justify-content:center;gap:9px;min-width:44px;min-height:44px;flex-shrink:0;margin-right:25px;padding:8px 0;border:0;background:transparent;color:inherit;text-transform:uppercase;letter-spacing:1px;font-size:10px;font-weight:700}
+.store-menu-open>span:first-child{font-size:20px;line-height:1}
+.store-menu-open:focus-visible{outline:2px solid currentColor;outline-offset:2px}
+dialog.store-menu{position:fixed;inset:0 auto 0 0;width:380px;max-width:90vw;height:100dvh;max-height:100dvh;margin:0;padding:28px;border:0;border-radius:0;background:#101010;color:#fff;overflow:auto;box-shadow:15px 0 70px #0005}
+dialog.store-menu::backdrop{background:#0008;backdrop-filter:blur(3px)}
+.store-menu-head{display:flex;justify-content:space-between;gap:18px;align-items:center;padding-bottom:28px;border-bottom:1px solid #333;font-size:11px;font-weight:700;letter-spacing:1.5px}
+.store-menu-close{display:grid;place-items:center;min-width:44px;min-height:44px;margin-right:-8px;padding:8px;border:0;background:transparent;color:#fff;font-size:25px;line-height:1}
+.store-menu-links{display:flex;flex-direction:column;gap:5px;padding:28px 0}
+.store-menu-links a{display:block;min-height:58px;padding:10px 0;font-family:Impact,'Arial Narrow',sans-serif;font-size:34px;line-height:1.15;text-transform:uppercase;color:#a5a5a5}
+.store-menu-links a:hover,.store-menu-links a[aria-current="page"]{color:#fff}
+.store-menu-links a[aria-current="page"]{text-decoration:underline;text-decoration-thickness:2px;text-underline-offset:8px}
+.store-menu-caption{border-top:1px solid #333;padding-top:24px;color:#a5a5a5;font-size:9px;letter-spacing:1.5px;text-transform:uppercase}
+.store-menu :is(a,button):focus-visible{outline:2px solid #fff;outline-offset:3px}
+@media(hover:hover) and (pointer:fine){.skate-play:hover img{transform:scale(1.035)}.skate-play:hover .skate-play-icon{background:#000c;transform:scale(1.06)}}
+@media(max-width:1100px){.skate-closing{align-items:flex-start;flex-direction:column}.skate-closing>.stack{justify-content:flex-start}}
+@media(max-width:1000px){.store-menu-open{margin-right:12px}.store-menu-open-label{display:none}}
+@media(max-width:760px){
+  .skate-hero{min-height:330px;padding:36px 20px}
+  .skate-hero-copy h1{font-size:100px;letter-spacing:-2px}
+  .skate-hero-copy p{font-size:12px;max-width:300px}
+  .skate-section-nav{gap:25px;padding-inline:20px}
+  .skate-section-nav a{min-height:56px;font-size:9px}
+  .skate-section{padding:46px 20px}
+  .skate-section-head{gap:12px;margin-bottom:27px}
+  .skate-featured-grid{grid-template-columns:1fr;gap:36px}
+  .skate-film-meta{padding-top:17px}
+  .skate-film-meta h3{font-size:18px}
+  .skate-film-meta p{font-size:12px}
+  .skate-play-icon{width:50px;height:50px}
+  .skate-play-label{left:18px;bottom:16px;font-size:9px}
+  .skate-history-intro{grid-template-columns:1fr;gap:22px;margin-bottom:32px}
+  .skate-history-intro p{font-size:13px}
+  .skate-chapters{grid-template-columns:1fr;gap:27px}
+  .skate-chapter-number{margin-bottom:15px}
+  .skate-chapters p{max-width:560px}
+  .skate-history-photo{margin-top:32px}
+  .skate-history-photo img{height:270px}
+  .skate-team-grid{grid-template-columns:1fr;gap:22px}
+  .skate-rider-copy{padding:22px}
+  .skate-rider-copy h3{font-size:22px}
+  .skate-archive-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:30px 18px}
+  .skate-archive-grid .skate-film-meta h3{font-size:14px}
+  .skate-closing{padding:46px 20px;gap:28px}
+  .skate-closing>.stack{width:100%}
+  .skate-closing .btn{flex:1;white-space:normal;text-align:center}
+}
+@media(max-width:480px){
+  .skate-rider{grid-template-columns:1fr}
+  .skate-rider-photo{height:auto;min-height:0;aspect-ratio:16/9}
+  .skate-rider-copy{padding:24px}
+  .skate-archive-grid{grid-template-columns:1fr}
+  .skate-archive-grid .skate-film-meta h3{font-size:17px}
+  .store-menu-open{min-width:32px;margin-right:8px}
+  dialog.store-menu{padding:22px}
+  .store-menu-links a{font-size:32px}
+}
+@media(prefers-reduced-motion:reduce){.skate-page *,dialog.store-menu,.store-menu-open{animation:none!important;transition:none!important;scroll-behavior:auto!important}}
+
+html.store-menu-visible{overflow:hidden}
+.skate-page [hidden]{display:none!important}
+.skate-more{align-items:center;gap:24px;flex-wrap:wrap}
+.skate-closing .eyebrow{margin-bottom:18px}
+.skate-closing p{margin-top:16px;color:#bbb;font-size:13px}
+.store-header .toplinks a[aria-current="page"]{text-decoration:underline;text-underline-offset:6px}

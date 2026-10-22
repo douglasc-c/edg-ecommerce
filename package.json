@@ -11,7 +11,7 @@
     "dev": "node --env-file-if-exists=.env --watch src/server.mjs",
     "seed": "node --env-file-if-exists=.env src/seed.mjs",
     "test": "node --test test/*.test.mjs",
-    "check": "node --check src/server.mjs && node --check public/app.js",
+    "check": "node --check src/server.mjs && node --check public/app.js && node --check public/skate.js",
     "test:ui": "playwright test",
     "dev:cloudflare": "wrangler dev",
     "deploy": "wrangler deploy",
