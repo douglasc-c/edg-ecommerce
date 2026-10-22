@@ -15,7 +15,7 @@ function mock(steps) {
   const calls=[];
   const fetcher=async(url,init)=>{
     const step=steps.shift();assert.ok(step,`Solicitud inesperada: ${url}`);
-    calls.push({url,init});assert.equal(url,BASE+step.path);assert.equal(init.method,step.method||'GET');assert.equal(init.redirect,'error');
+    calls.push({url,init});assert.equal(url,BASE+step.path);assert.equal(init.method,step.method||'GET');assert.equal(init.redirect,'manual');
     assert.equal(init.headers.Authorization,'Basic '+Buffer.from('public-example:secret-example').toString('base64'));
     return typeof step.result==='function'?step.result(url,init):step.result;
   };
@@ -25,6 +25,15 @@ function mock(steps) {
 test('consulta el remitente configurado por ID y normaliza su dirección sin datos fiscales',async()=>{
   const m=mock([{path:'/addresses/sender-addresses/17',result:json({data:{id:17,name:sender.name,company_name:'EDG',address_line_1:sender.address,house_number:'10',address_line_2:'Almacén',postal_code:'08001',city:'Barcelona',country_code:'ES',email:sender.email,phone_number:sender.telephone,tax_numbers:[{name:'VAT',value:'no-publicar'}],state_province_code:'null'}})}]);
   assert.deepEqual(await sendcloudProvider(config,m.fetcher).sender(),sender);m.done();
+});
+
+test('bloquea redirecciones del remitente sin reenviar credenciales ni exponer Location',async()=>{
+  for(const status of [301,302,303,307,308]) {
+    const location='https://other.example.test/private?token=never-expose';
+    const m=mock([{path:'/addresses/sender-addresses/17',result:new Response(null,{status,headers:{Location:location}})}]);
+    await assert.rejects(sendcloudProvider(config,m.fetcher).sender(),error=>error.status===502 && error.code==='SENDCLOUD_REDIRECT' && error.uncertain===false && !error.message.includes(location) && !error.message.includes('never-expose'));
+    assert.equal(m.calls.length,1);m.done();
+  }
 });
 
 test('rechaza un remitente de otro país o un ID distinto',async()=>{
@@ -116,6 +125,18 @@ test('reconcilia una respuesta incierta sin repetir la emisión',async()=>{
 test('marca la creación como incierta si no puede reconciliar y no permite reintento automático',async()=>{
   const m=mock([{path:'/shipments?external_reference_id=edg-shipping-123&page_size=2',result:json({data:[]})},{path:'/shipments/announce',method:'POST',result:json({},503)},{path:'/shipments?external_reference_id=edg-shipping-123&page_size=2',result:json({data:[]})}]);
   await assert.rejects(sendcloudProvider(config,m.fetcher).create({reference:'edg-shipping-123',sender,destination,parcel,option}),{status:502,uncertain:true,code:'SENDCLOUD_UNCERTAIN'});assert.equal(m.calls.filter(c=>c.init.method==='POST').length,1);m.done();
+});
+
+test('una redirección al crear conserva el resultado incierto y solo consulta para conciliar',async()=>{
+  const m=mock([{path:'/shipments?external_reference_id=edg-shipping-123&page_size=2',result:json({data:[]})},{path:'/shipments/announce',method:'POST',result:new Response(null,{status:307,headers:{Location:'https://other.example.test/announce'}})},{path:'/shipments?external_reference_id=edg-shipping-123&page_size=2',result:json({data:[]})}]);
+  await assert.rejects(sendcloudProvider(config,m.fetcher).create({reference:'edg-shipping-123',sender,destination,parcel,option}),{status:502,uncertain:true,code:'SENDCLOUD_UNCERTAIN'});
+  assert.equal(m.calls.filter(call=>call.init.method==='POST').length,1);m.done();
+});
+
+test('concilia una redirección de emisión con la remesa existente sin volver a contratar',async()=>{
+  const m=mock([{path:'/shipments?external_reference_id=edg-shipping-123&page_size=2',result:json({data:[]})},{path:'/shipments/announce',method:'POST',result:new Response(null,{status:308,headers:{Location:'https://other.example.test/announce'}})},{path:'/shipments?external_reference_id=edg-shipping-123&page_size=2',result:json({data:[shipment()]})}]);
+  const result=await sendcloudProvider(config,m.fetcher).create({reference:'edg-shipping-123',sender,destination,parcel,option});
+  assert.equal(result.shipment_id,'shipment-uuid');assert.equal(m.calls.filter(call=>call.init.method==='POST').length,1);m.done();
 });
 
 test('una referencia duplicada HTTP409 se reconcilia con GET',async()=>{

@@ -161,5 +161,19 @@ try{
     result=await call(path);assert.equal(result.r.status,200,JSON.stringify(result.data));assert.equal(result.data.some(product=>product.id===id),false,`Producto eliminado no reaparece tras reiniciar: ${path}`);
   }
   result=await call('/api/categories');assert.equal(result.r.status,200,JSON.stringify(result.data));assert.equal(result.data.some(category=>category.name==='Prueba'),false,'Categoría eliminada no reaparece tras reiniciar');
-  console.log('Workers: idioma, rangos MP4, administración, autorización, fotos, categorías, migración conservativa, variantes de color y talla, inventario independiente, eliminación, bloqueo de ventas y persistencia verificados.');
+  // La conexión debe ejecutar el fetch real de workerd: los mocks de Node no detectan opciones de red incompatibles.
+  const senderRequests=[];let senderRedirect=false;
+  await mf.dispose();mf=create({...options,bindings:{...options.bindings,SENDCLOUD_PUBLIC_KEY:'smoke-public-key',SENDCLOUD_SECRET_KEY:'smoke-secret-key',SENDCLOUD_SENDER_ADDRESS_ID:'17'},outboundService:async request=>{
+    senderRequests.push(request.url);
+    assert.equal(request.url,'https://panel.sendcloud.sc/api/v3/addresses/sender-addresses/17','No se siguen redirecciones ni se envían credenciales a otro destino');
+    assert.equal(request.headers.get('authorization'),'Basic '+Buffer.from('smoke-public-key:smoke-secret-key').toString('base64'));
+    if(senderRedirect)return new Response(null,{status:302,headers:{Location:'https://untrusted.example.test/collect'}});
+    return Response.json({data:{id:17,name:'Equipo de pruebas',company_name:'EDG',address_line_1:'Carrer de Mallorca',house_number:'10',postal_code:'08001',city:'Barcelona',country_code:'ES',email:'sender@example.test',phone_number:'+34930000000'}});
+  }});
+  result=await call('/api/admin/europe-shipping/check','POST');assert.equal(result.r.status,200,JSON.stringify(result.data));
+  assert.equal(result.data.ready,true);assert.equal(result.data.sender.id,17);assert.equal(result.data.sender.city,'Barcelona');assert.equal(senderRequests.length,1,'La conexión llega al proveedor desde workerd');
+  senderRedirect=true;
+  result=await call('/api/admin/europe-shipping/check','POST');assert.equal(result.r.status,502,JSON.stringify(result.data));
+  assert.equal(senderRequests.length,2,'La redirección se rechaza sin una segunda llamada al destino externo');
+  console.log('Workers: idioma, rangos MP4, administración, autorización, fotos, categorías, migración conservativa, variantes de color y talla, inventario independiente, eliminación, bloqueo de ventas, persistencia y conexión Sendcloud sin seguir redirecciones verificados.');
 }finally{if(mf)await mf.dispose();await rm(directory,{recursive:true,force:true});}
