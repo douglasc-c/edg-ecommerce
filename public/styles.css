@@ -91,9 +91,9 @@ button.product-visual{width:100%;border:0;color:var(--ink)}pre{white-space:pre-w
 #product-size .form-help{margin-top:10px;font-weight:400}
 
 /* Native language picker: visible flags, accessible language names. */
-.language-select{appearance:none;-webkit-appearance:none;flex:0 0 48px;width:48px;height:44px;margin:0;padding:4px 6px;border:0;border-radius:0;background:transparent;color:inherit;font-family:"Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji",sans-serif;font-size:22px;line-height:1.2;text-align:center;text-align-last:center;cursor:pointer;opacity:.9}
+.language-select{appearance:none;-webkit-appearance:none;flex:0 0 48px;width:48px;height:44px;margin:0;padding:4px 6px;border:0;border-radius:0;background:transparent;color:inherit;font-family:"Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji",sans-serif;font-size:22px;line-height:1.2;text-align:center;text-align-last:center;cursor:pointer;opacity:.9;-webkit-tap-highlight-color:transparent}
 .language-select:hover{opacity:1}
-.language-select:focus-visible{outline:2px solid currentColor;outline-offset:4px;opacity:1}
+.language-select:focus,.language-select:focus-visible{outline:none;box-shadow:none;opacity:1}
 .language-select option{background:#fff;color:#111}
 .store-header .language-select{margin-left:auto}
 .admin-top>.stack{align-items:center;flex-wrap:nowrap;min-width:0}
