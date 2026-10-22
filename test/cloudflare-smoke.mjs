@@ -24,6 +24,14 @@ try{
   assert.match(skateAsset.headers.get('content-security-policy'),/img-src 'self' data: https:\/\/i\.ytimg\.com;/);
   assert.equal(skateAsset.headers.get('referrer-policy'),'strict-origin-when-cross-origin');
   assert.match(await skateAsset.text(),/function skatePage/);
+  const musicAsset=await mf.dispatchFetch(origin+'/music.js');
+  assert.equal(musicAsset.status,200);
+  assert.match(await musicAsset.text(),/function musicPage/);
+  for(const name of ['banda-hero','banda-hero-640','banda-live','rap-subterraneo','sobrenatural','mensageiro-do-corre','a-parada-e-o-movimento','achados-no-mundo-perdido','pratas-da-casa','aperta-o-play']){
+    const response=await mf.dispatchFetch(origin+`/music/${name}.webp`);
+    assert.equal(response.status,200);
+    assert.deepEqual(Buffer.from(await response.arrayBuffer()),await readFile(resolve('public/music',`${name}.webp`)));
+  }
   for(const path of ['/edg-intro.mp4','/edg-intro-mobile.mp4','/edg-logo-tremor-loop.mp4']){
     const file=await readFile(resolve('public',path.slice(1)));
     let etag;

@@ -75,8 +75,18 @@ function bindStoreHeader(){
   window.addEventListener('scroll',schedule,{passive:true,signal:controller.signal});
   window.addEventListener('resize',resync,options);
   window.addEventListener('pageshow',resync,options);
-  header.addEventListener('focusin',()=>{
-    if(hasKeyboardFocus()){setHidden(false);resetDirection();}
+  header.addEventListener('focusin',event=>{
+    if(hasKeyboardFocus()){
+      setHidden(false);resetDirection();
+      // Reveal keyboard-focused links inside the narrow screen navigation row
+      // without moving the page to the sticky header.
+      const link=event.target.closest('.toplinks a');
+      if(link){
+        const nav=link.parentElement,box=link.getBoundingClientRect(),bounds=nav.getBoundingClientRect();
+        if(box.left<bounds.left)nav.scrollLeft-=bounds.left-box.left;
+        else if(box.right>bounds.right)nav.scrollLeft+=box.right-bounds.right;
+      }
+    }
   },options);
   return ()=>{controller.abort();observer.disconnect();cancelAnimationFrame(frame);};
 }
@@ -283,7 +293,7 @@ function bindCampaignMotion(){
 function storeShell(content) {
   const count=state.cart.items.reduce((s,p)=>s+p.quantity,0);
   const scrolled=isStoreHeaderScrolled();
-  return `${demoBanner()}<header class="topbar store-header${scrolled?' is-scrolled':''}${scrolled&&storeHeaderHidden?' is-scroll-hidden':''}"><div class="store-header-brand"${scrolled?'':' inert aria-hidden="true"'}>${brand()}</div><button type="button" class="store-menu-open" data-action="open-store-menu" aria-label="Abrir menú" aria-controls="store-menu" aria-expanded="false"><span aria-hidden="true">☰</span><span class="store-menu-open-label">Menú</span></button><nav class="toplinks"><a href="#store">Inicio</a><a href="#catalog">Colección</a><a href="#skate"${location.hash==='#skate'?' aria-current="page"':''}>Skate</a><a href="#orders">Mis pedidos</a>${has('dashboard')?'<a href="#admin">Gestión</a>':''}</nav><div class="topactions">${state.user?`<button class="btn small" data-action="account">${escape(state.user.name.split(' ')[0])} · Mi cuenta</button>`:'<button class="btn small" data-action="login">Iniciar sesión</button>'}<a class="btn small" href="#cart">Carrito <span class="cart-count">${count}</span></a></div></header><main class="store-main">${skateStoreMenu()}${content}<footer class="footer"><span>© ${new Date().getFullYear()} EDG</span><nav aria-label="Enlaces del pie de página"><a href="#catalog">Colección</a><a href="#skate">Skate</a><a href="#orders">Mis pedidos</a><a href="#cart">Carrito</a></nav><a class="footer-brand" href="#store"><img class="sr-only" src="/edg-footer-logo.png" alt="EDG" width="1122" height="125" loading="lazy" decoding="async"></a></footer></main>`;
+  return `${demoBanner()}<header class="topbar store-header${scrolled?' is-scrolled':''}${scrolled&&storeHeaderHidden?' is-scroll-hidden':''}"><div class="store-header-brand"${scrolled?'':' inert aria-hidden="true"'}>${brand()}</div><button type="button" class="store-menu-open" data-action="open-store-menu" aria-label="Abrir menú" aria-controls="store-menu" aria-expanded="false"><span aria-hidden="true">☰</span><span class="store-menu-open-label">Menú</span></button><nav class="toplinks"><a href="#store">Inicio</a><a href="#catalog">Colección</a><a href="#skate"${location.hash==='#skate'?' aria-current="page"':''}>Skate</a><a href="#musica"${location.hash==='#musica'?' aria-current="page"':''}>Música</a><a href="#orders">Mis pedidos</a>${has('dashboard')?'<a href="#admin">Gestión</a>':''}</nav><div class="topactions">${state.user?`<button class="btn small" data-action="account">${escape(state.user.name.split(' ')[0])} · Mi cuenta</button>`:'<button class="btn small" data-action="login">Iniciar sesión</button>'}<a class="btn small" href="#cart">Carrito <span class="cart-count">${count}</span></a></div></header><main class="store-main">${skateStoreMenu()}${content}<footer class="footer"><span>© ${new Date().getFullYear()} EDG</span><nav aria-label="Enlaces del pie de página"><a href="#catalog">Colección</a><a href="#skate">Skate</a><a href="#musica">Música</a><a href="#orders">Mis pedidos</a><a href="#cart">Carrito</a></nav><a class="footer-brand" href="#store"><img class="sr-only" src="/edg-footer-logo.png" alt="EDG" width="1122" height="125" loading="lazy" decoding="async"></a></footer></main>`;
 }
 function productCards(){
   const items=state.products.filter(p=>(state.category==='Todos'||p.category===state.category)&&`${p.name} ${p.sku}`.toLowerCase().includes(state.search.toLowerCase()));
@@ -359,7 +369,7 @@ let renderVersion=0;
 async function render({scrollToCatalog=false}={}){const version=++renderVersion;let page=location.hash.slice(1)||'store';if(page==='catalog')page='store';const needsLogin=!state.user&&navItems.some(([id])=>id===page);if(needsLogin)page='store';try{
   let html;
   if(page.startsWith('reset-password/')){html=storeShell('<div class="password-page"><h1>Crea una nueva contraseña</h1><p class="muted">El enlace es temporal y solo se puede utilizar una vez.</p><form id="reset-form" data-token="'+escape(page.split('/')[1])+'">'+field('password','Nueva contraseña','','password','required minlength="12" maxlength="128" autocomplete="new-password"')+'<button class="btn primary" type="submit">Guardar nueva contraseña</button></form></div>');}
-  else if(page==='skate'){if(state.user)state.cart=await api('/cart');html=skatePage();}
+  else if(['skate','musica'].includes(page)){if(state.user)state.cart=await api('/cart');html=page==='skate'?skatePage():musicPage();}
   else if(['store','cart','orders'].includes(page)) {
     if(page==='store'){[state.products,state.storeCategories]=await Promise.all([api('/products'),api('/categories')]);}else state.products=await api('/products');if(state.user)state.cart=await api('/cart');
     html=page==='store'?storePage():page==='cart'?cartPage():ordersPage(state.user?await api('/orders'):[]);
@@ -377,7 +387,7 @@ async function render({scrollToCatalog=false}={}){const version=++renderVersion;
     if(page==='users'){state.users=await api('/admin/users');html=usersPage(state.users);}
     if(page==='audit'){const logs=await api('/admin/audit');html=adminShell(page,`${title('Actividad','Historial de los cambios realizados por el equipo.')}<section class="panel"><div class="table-wrap"><table><thead><tr><th>Fecha</th><th>Usuario</th><th>Acción</th><th>Referencia</th></tr></thead><tbody>${logs.map(l=>`<tr><td>${date(l.created_at)}</td><td>${escape(l.actor_name||'Sistema')}</td><td>${escape(auditActions[l.action]||l.action)}</td><td>${escape(l.entity_id||'—')}</td></tr>`).join('')}</tbody></table></div></section>`);}
   }
-  if(version!==renderVersion)return;teardownCampaignMotion();teardownStoreHeader();teardownSkateNavigation();const wasSkate=!!$('.skate-page');$('#app').innerHTML=html;teardownSkateNavigation=bindSkateNavigation();document.title=page==='skate'?'SKATE · Historia y vídeos · EDG Skateboards':'EDG Commerce · Tienda y gestión';if((page==='skate'||wasSkate)&&location.hash!=='#catalog')window.scrollTo({top:0,behavior:'auto'});teardownStoreHeader=bindStoreHeader();teardownCampaignMotion=bindCampaignMotion();if(needsLogin)authDialog();
+  if(version!==renderVersion)return;teardownCampaignMotion();teardownStoreHeader();teardownSkateNavigation();const wasSkate=!!$('.skate-page');$('#app').innerHTML=html;teardownSkateNavigation=bindSkateNavigation();document.title=page==='musica'?'MÚSICA · Historia y discos · EDG':page==='skate'?'SKATE · Historia y vídeos · EDG Skateboards':'EDG Commerce · Tienda y gestión';if((['skate','musica'].includes(page)||wasSkate)&&location.hash!=='#catalog')window.scrollTo({top:0,behavior:'auto'});teardownStoreHeader=bindStoreHeader();teardownCampaignMotion=bindCampaignMotion();if(needsLogin)authDialog();
   if(page==='stock'){const rows=await api('/admin/movements');if(version!==renderVersion)return;$('#movements').innerHTML=rows.length?`<div class="table-wrap"><table><thead><tr><th>Producto</th><th>Variación</th><th>Motivo</th><th>Responsable</th><th>Fecha</th></tr></thead><tbody>${rows.map(r=>`<tr><td>${escape(r.product_name)}</td><td>${r.quantity>0?'+':''}${r.quantity}</td><td>${escape(r.reason)}</td><td>${escape(r.actor_name||'Sistema')}</td><td>${date(r.created_at)}</td></tr>`).join('')}</tbody></table></div>`:empty('No hay movimientos');}
   if(scrollToCatalog&&location.hash==='#catalog')$('#catalog')?.scrollIntoView({behavior:window.matchMedia('(prefers-reduced-motion:reduce)').matches?'auto':'smooth'});
 }catch(e){toast(e.message,true);if(!$('#app').children.length||$('#app').querySelector('.store-loading'))$('#app').innerHTML=empty('No se ha podido cargar','Actualiza la página para volver a intentarlo.');}}
@@ -405,6 +415,8 @@ document.addEventListener('click',async e=>{const el=e.target.closest('[data-act
   if(action==='open-store-menu'){const menu=$('#store-menu');if(menu&&!menu.open){menu.showModal();document.documentElement.classList.add('store-menu-visible');el.setAttribute('aria-expanded','true');}return;}
   if(action==='close-store-menu'){$('#store-menu')?.close();return;}
   if(action==='play-skate')return playSkateFilm(el);
+  if(action==='play-music')return playSkateFilm(el,musicFeatured,'play-music');
+  if(action==='music-jump'){e.preventDefault();return jumpMusicSection(el);}
   if(action==='skate-jump'){e.preventDefault();return jumpSkateSection(el);}
   if(action==='skate-rider'){e.preventDefault();jumpSkateSection({dataset:{section:'destacados'}});const button=document.querySelector(`.skate-featured-grid [data-action="play-skate"][data-id="${id}"]`);if(button)playSkateFilm(button);else document.querySelector(`.skate-featured-grid [data-video-id="${id}"] iframe`)?.focus({preventScroll:true});return;}
   if(action==='skate-more'){const expanded=el.getAttribute('aria-expanded')!=='true';document.querySelectorAll('[data-skate-extra]').forEach(item=>{if(!expanded){const frame=item.querySelector('iframe');if(frame){const film=skateArchive.find(f=>f.id===frame.parentElement.dataset.videoId);if(film)frame.parentElement.innerHTML=skatePoster(film);}}item.hidden=!expanded;});el.setAttribute('aria-expanded',String(expanded));el.textContent=expanded?'Ver menos vídeos':'Ver más vídeos';return;}

@@ -38,7 +38,7 @@ button.product-visual{width:100%;border:0;color:var(--ink)}pre{white-space:pre-w
   .store-header-brand .brand{width:64px;height:44px}
   .store-header .brand-logo{width:64px;height:41px}
   .store-header .brand-logo img{width:105px;left:-20px;top:-16px}
-  .store-header .toplinks{order:3;flex:0 0 100%;width:100%;gap:16px;padding:10px 0 0;border-top:1px solid #262626;transition:border-color .32s ease}
+  .store-header .toplinks{order:3;flex:0 0 100%;width:100%;gap:16px;overflow-x:auto;scrollbar-width:none;padding:10px 0 0;border-top:1px solid #262626;transition:border-color .32s ease}
   .store-header.is-scrolled .toplinks{border-top-color:#e5e5e5}
   .store-header .toplinks a{font-size:10px}
   /* Keep navigation on its own row while the logo has zero width. */

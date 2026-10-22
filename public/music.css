@@ -1,0 +1,73 @@
+/* MÚSICA shares the SKATE page's editorial typography and video controls. */
+.music-page .skate-hero{min-height:490px}
+.music-page .skate-hero-image{object-position:50% 44%;opacity:.66}
+.music-page .skate-hero:after{background:linear-gradient(90deg,#000c 0,#0003 78%),linear-gradient(0deg,#0009,transparent 80%)}
+.music-page .skate-hero-copy{max-width:760px}
+.music-page .skate-hero-copy p{max-width:460px}
+.music-hero-actions{display:flex;align-items:center;gap:14px 24px;flex-wrap:wrap;margin-top:26px}
+.music-hero-actions .btn{background:#fff;border-color:#fff;color:#111;white-space:normal;text-align:center}
+.music-hero-actions .btn:hover{background:#dedede;border-color:#dedede}
+.music-hero-actions .skate-text-link{border-color:#aaa;color:#fff}
+.music-page .skate-text-link{min-height:44px}
+.music-history{background:#f4f4f4;border-top:1px solid #e2e2e2}
+.music-history-intro{display:grid;grid-template-columns:1fr 1fr;gap:7vw;align-items:start;margin-bottom:48px}
+.music-history-intro>div{min-width:0}
+.music-history-intro .eyebrow{margin-bottom:18px}
+.music-history-intro h2{max-width:540px}
+.music-history-intro p{max-width:560px;font-size:14px;color:#555}
+.music-history-intro p+p{margin-top:18px}
+.music-timeline{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:36px 32px;list-style:none;margin:0;padding:0}
+.music-timeline li{min-width:0;padding-top:22px;border-top:1px solid #c8c8c8}
+.music-timeline time{display:block;margin-bottom:20px;font-family:Impact,'Arial Narrow',sans-serif;font-size:46px;line-height:1;letter-spacing:-1px;font-weight:900}
+.music-timeline h3{margin-bottom:12px;font-size:17px;text-transform:uppercase;line-height:1.3}
+.music-timeline p{max-width:420px;font-size:12px;color:#555}
+.music-discography{background:#111;color:#fff}
+.music-discography .skate-section-head p{color:#bcbcbc}
+.music-album-grid{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:32px 24px;align-items:start}
+.music-album{min-width:0}
+.music-album>img{display:block;width:100%;height:auto;aspect-ratio:1;object-fit:contain;border:0;border-radius:0;box-shadow:none;background:transparent}
+.music-album-meta{padding-top:19px}
+.music-album-meta .eyebrow{font-size:9px;color:#bbb;margin-bottom:9px}
+.music-album-meta h3{font-size:clamp(14px,1.3vw,19px);line-height:1.35;text-transform:uppercase;letter-spacing:-.2px;overflow-wrap:break-word}
+.music-live{background:#fff}
+.music-live:has(.music-live-image){display:grid;grid-template-columns:1fr 1fr;gap:6vw;align-items:center}
+.music-live-copy{min-width:0;max-width:650px}
+.music-live-copy>.eyebrow{margin-bottom:18px}
+.music-live-copy>h2{max-width:560px}
+.music-live-copy>p{font-size:13px;color:#555;margin-top:24px;max-width:540px}
+.music-stages{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:0 24px;list-style:none;margin:28px 0 0;padding:0}
+.music-stages li{padding:15px 0;border-top:1px solid #ddd;font-size:10px;font-weight:700;letter-spacing:.6px;line-height:1.5;text-transform:uppercase;overflow-wrap:break-word}
+.music-live-image{display:block;width:100%;height:auto;max-height:650px;aspect-ratio:16/9;object-fit:cover;object-position:center;background:#eee}
+.music-page .skate-closing{border-top:1px solid #303030}
+@media(max-width:1000px){
+  .music-album-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:34px 24px}
+  .music-album-meta h3{font-size:18px}
+  .music-timeline{grid-template-columns:repeat(2,minmax(0,1fr))}
+}
+@media(max-width:760px){
+  .music-page .skate-hero{min-height:390px}
+  .music-page .skate-hero-copy h1{font-size:clamp(64px,15vw,104px);letter-spacing:-2px}
+  .music-page .skate-hero-copy p{font-size:13px;max-width:360px}
+  .music-hero-actions{margin-top:22px;gap:12px 20px}
+  .music-history-intro{grid-template-columns:1fr;gap:24px;margin-bottom:34px}
+  .music-history-intro p{font-size:13px}
+  .music-timeline{gap:30px 24px}
+  .music-timeline time{font-size:40px;margin-bottom:16px}
+  .music-timeline h3{font-size:15px}
+  .music-album-grid{gap:28px 18px}
+  .music-album-meta{padding-top:15px}
+  .music-album-meta h3{font-size:15px}
+  .music-live:has(.music-live-image){grid-template-columns:1fr;gap:32px}
+  .music-live-image{aspect-ratio:16/9;max-height:440px}
+}
+@media(max-width:480px){
+  .music-page .skate-hero{min-height:360px}
+  .music-timeline{grid-template-columns:1fr;gap:24px}
+  .music-timeline li{display:grid;grid-template-columns:66px minmax(0,1fr);gap:18px;padding-top:20px}
+  .music-timeline time{font-size:32px;margin:0}
+  .music-timeline h3{font-size:16px;margin-bottom:9px}
+  .music-timeline p{font-size:12px}
+  .music-album-grid{gap:28px 14px}
+  .music-album-meta h3{font-size:13px}
+  .music-stages{gap:0 18px}
+}
