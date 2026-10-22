@@ -226,16 +226,16 @@ test('la migración v4 conserva productos, reservas e imágenes y se puede repet
   const imageId=hash('legacy selected category');
   db.exec(`CREATE TABLE schema_version(version INTEGER PRIMARY KEY);
     INSERT INTO schema_version VALUES(1),(2),(3),(4);
-    CREATE TABLE products(id TEXT PRIMARY KEY,name TEXT,category TEXT,stock INTEGER,reserved INTEGER);
-    INSERT INTO products VALUES('legacy','Producto heredado','Heredada',10,2);
+    CREATE TABLE products(id TEXT PRIMARY KEY,name TEXT,category TEXT,stock INTEGER,reserved INTEGER,size TEXT NOT NULL DEFAULT '');
+    INSERT INTO products VALUES('legacy','Producto heredado','Heredada',10,2,'');
     CREATE TABLE categories(name TEXT PRIMARY KEY COLLATE NOCASE,image_id TEXT);
   `);
   db.prepare('INSERT INTO categories VALUES(?,?)').run('Heredada',imageId);
   migrate(db);
   migrate(db);
-  assert.equal(db.prepare('SELECT MAX(version) version FROM schema_version').get().version,6);
+  assert.equal(db.prepare('SELECT MAX(version) version FROM schema_version').get().version,7);
   assert.deepEqual({...db.prepare('SELECT * FROM products').get()},
-    {id:'legacy',name:'Producto heredado',category:'Heredada',stock:10,reserved:2,deleted_at:null});
+    {id:'legacy',name:'Producto heredado',category:'Heredada',stock:10,reserved:2,size:'',deleted_at:null,sizes:'[]'});
   assert.equal(db.prepare('SELECT image_id FROM categories').get().image_id,imageId);
   assert.equal(db.prepare('SELECT COUNT(*) n FROM schema_version WHERE version=5').get().n,1);
 });

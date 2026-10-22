@@ -160,13 +160,14 @@ for(const existingCategories of [false,true]) {
     if(existingCategories)db.exec("CREATE TABLE categories(name TEXT PRIMARY KEY COLLATE NOCASE); INSERT INTO categories VALUES('Sin productos');");
     initialize(db);
     initialize(db);
-    assert.equal(db.prepare('SELECT MAX(version) version FROM schema_version').get().version,6);
+    assert.equal(db.prepare('SELECT MAX(version) version FROM schema_version').get().version,7);
     const shop=commerce(db,config,providers(config)),legacy=shop.categories().find(row=>row.name==='Heredada');
     assert.equal(legacy.image_id,null);
     assert.equal(legacy.image,null);
     assert.ok(db.prepare('SELECT name FROM categories WHERE name=?').get('Heredada'));
     assert.equal(db.prepare('SELECT name FROM products WHERE id=?').get('old-product').name,'Producto heredado');
     assert.equal(db.prepare('SELECT size FROM products WHERE id=?').get('old-product').size,'M');
+    assert.deepEqual(JSON.parse(db.prepare('SELECT sizes FROM products WHERE id=?').get('old-product').sizes),['M']);
     if(existingCategories)assert.ok(shop.categories().some(row=>row.name==='Sin productos'));
   });
 }

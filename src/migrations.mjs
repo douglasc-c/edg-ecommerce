@@ -98,10 +98,26 @@ function migrateV6(db) {
   try{apply();db.exec('COMMIT');}catch(error){db.exec('ROLLBACK');throw error;}
 }
 
+function migrateV7(db) {
+  const apply=()=>{
+    if(db.prepare('SELECT MAX(version) v FROM schema_version').get().v>=7)return;
+    db.exec("ALTER TABLE products ADD COLUMN sizes TEXT NOT NULL DEFAULT '[]';");
+    const update=db.prepare('UPDATE products SET sizes=? WHERE id=?');
+    for(const product of db.prepare("SELECT id,size FROM products WHERE size!=''").all()) {
+      update.run(JSON.stringify([product.size]),product.id);
+    }
+    db.exec('INSERT INTO schema_version VALUES(7);');
+  };
+  if(db.transactionSync)return db.transactionSync(apply);
+  db.exec('BEGIN IMMEDIATE');
+  try{apply();db.exec('COMMIT');}catch(error){db.exec('ROLLBACK');throw error;}
+}
+
 export function migrate(db) {
   migrateV2(db);
   migrateV3(db);
   migrateV4(db);
   migrateV5(db);
   migrateV6(db);
+  migrateV7(db);
 }
