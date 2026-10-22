@@ -11,6 +11,7 @@ import { fiscalProvider,invoiceService } from './invoices.mjs';
 import { sendcloudProvider } from './sendcloud.mjs';
 import { europeShipping } from './europe-shipping.mjs';
 import { campaignVideoPaths, campaignVideoResponse } from './video-response.mjs';
+import { suggestLanguage } from './language.mjs';
 import { HttpError, requireThat, text, integer, email, postal, passwordHash, passwordMatches, roles, permissions, token, hash, now } from './security.mjs';
 export function configuration(env=process.env) {
   const c={url:(env.APP_URL||'http://localhost:3000').replace(/\/$/,''),mode:env.COMMERCE_MODE||'demo',production:env.NODE_ENV==='production',reservationMinutes:Number(env.RESERVATION_MINUTES||30),storeName:env.STORE_NAME||'EDG Commerce',mpToken:env.MERCADO_PAGO_ACCESS_TOKEN,mpSecret:env.MERCADO_PAGO_WEBHOOK_SECRET,collectorId:env.MERCADO_PAGO_COLLECTOR_ID,meToken:env.MELHOR_ENVIO_TOKEN,meSecret:env.MELHOR_ENVIO_WEBHOOK_SECRET,meSandbox:env.MELHOR_ENVIO_SANDBOX!=='false',originPostal:env.ORIGIN_POSTAL_CODE,supportEmail:env.SUPPORT_EMAIL,shippingFrom:env.SHIPPING_FROM_JSON?JSON.parse(env.SHIPPING_FROM_JSON):null};
@@ -79,7 +80,7 @@ export function createApp({db=database(),config=configuration(),provider=provide
     }
     const respond=(data,status=200)=>{res.writeHead(status,{'Content-Type':'application/json; charset=utf-8','Cache-Control':'no-store'});res.end(JSON.stringify(sanitize(data)));};
     if(path==='/api/health' && method==='GET') return respond({status:'ok'});
-    if(path==='/api/config' && method==='GET') return respond({name:config.storeName,mode:config.mode,language:'es',locale:'es-ES',currency:config.currency||'BRL',checkout_enabled:config.mode!=='catalog',payment:config.currency==='EUR'?'Pendiente de integración':'Mercado Pago',shipping:config.shippingProvider==='sendcloud'?'Sendcloud':'Melhor Envio',shipping_provider:config.shippingProvider,shipping_environment:config.sendcloud?.environment||'test',fiscal_environment:config.mode==='demo'?'demo':config.nfeEnvironment,email_enabled:config.mode==='demo'||Boolean(config.resendKey&&config.emailFrom&&config.emailKey)});
+    if(path==='/api/config' && method==='GET') return respond({name:config.storeName,mode:config.mode,language:'es',locale:'es-ES',...suggestLanguage({country:runtime==='worker'?req.country:null,acceptLanguage:req.headers['accept-language']}),currency:config.currency||'BRL',checkout_enabled:config.mode!=='catalog',payment:config.currency==='EUR'?'Pendiente de integración':'Mercado Pago',shipping:config.shippingProvider==='sendcloud'?'Sendcloud':'Melhor Envio',shipping_provider:config.shippingProvider,shipping_environment:config.sendcloud?.environment||'test',fiscal_environment:config.mode==='demo'?'demo':config.nfeEnvironment,email_enabled:config.mode==='demo'||Boolean(config.resendKey&&config.emailFrom&&config.emailKey)});
     if(path==='/api/products' && method==='GET') {shop.expire(); return respond(shop.products());}
     if(path==='/api/categories' && method==='GET') return respond(shop.categories().map(({name,image})=>({name,image})));
     if(path==='/api/auth/me' && method==='GET') {const u=session(req,false);return respond({user:u?publicUser(u):null,csrf:u?.csrf||null});}
@@ -231,6 +232,7 @@ export function createApp({db=database(),config=configuration(),provider=provide
       files['/edg-skate-history-mosaic.webp']='edg-skate-history-mosaic.webp';
       files['/music.js']='music.js';
       files['/music.css']='music.css';
+      for(const file of ['i18n.js','i18n-common.js','i18n-editorial.js'])files[`/${file}`]=file;
       for(const name of ['banda-hero','banda-hero-640','banda-live','rap-subterraneo','sobrenatural','mensageiro-do-corre','a-parada-e-o-movimento','achados-no-mundo-perdido','pratas-da-casa','aperta-o-play'])files[`/music/${name}.webp`]=`music/${name}.webp`;
       files['/edg-loading.js']='edg-loading.js';
       for(const id of ['g61','g99','63','121','197','221','240','257','15','19','28','47','55','92','101'])files[`/shape-${id}.webp`]=`shape-${id}.webp`;
