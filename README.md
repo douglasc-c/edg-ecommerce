@@ -150,7 +150,7 @@ Utiliza **una sola instancia del servidor** con disco persistente y copias de se
 
 Esta versión cubre la compra, las operaciones, las fotos, los cupones, la recuperación de contraseña y la integración de emisión de NF-e brasileñas. Antes de abrir la tienda, necesita las credenciales de los proveedores, un catálogo real, la identidad de la tienda y el alojamiento. Las API externas se han verificado mediante su documentación y con pruebas de respuestas controladas; **todavía es necesaria la homologación autenticada**.
 
-Todavía no incluye variantes de talla o color con SKU, precio o existencias independientes, cálculo tributario automático, conciliación automática de comisiones, devoluciones con logística inversa, verificación de correo electrónico, avisos de venta por correo electrónico o WhatsApp, múltiples almacenes ni integración de compras con proveedores. La emisión fiscal utiliza los datos tributarios configurados y revisados; no determina automáticamente el régimen, CFOP, CSOSN, DIFAL, IBS/CBS ni los tipos impositivos.
+Todavía no incluye cálculo tributario automático, conciliación automática de comisiones, devoluciones con logística inversa, verificación de correo electrónico, avisos de venta por correo electrónico o WhatsApp, múltiples almacenes ni integración de compras con proveedores. La emisión fiscal utiliza los datos tributarios configurados y revisados; no determina automáticamente el régimen, CFOP, CSOSN, DIFAL, IBS/CBS ni los tipos impositivos.
 
 En la integración de etiquetas, la creación automática se limita a presupuestos de **un solo bulto**; los servicios que exigen una oficina, XML fiscal o varios bultos requieren ampliar el adaptador u operar desde el panel de Melhor Envio. No repitas una creación o compra ante una respuesta incierta sin comprobar el panel del proveedor. Para recuperar automáticamente estos casos y los webhooks perdidos, la siguiente evolución debe incluir una cola duradera y conciliación periódica.
 
@@ -164,15 +164,27 @@ Los listados administrativos tienen límites de 200 pedidos, usuarios o movimien
 - [Melhor Envio: creación de etiquetas](https://docs.melhorenvio.com.br/reference/inserir-fretes-no-carrinho)
 - [Melhor Envio: webhooks](https://docs.melhorenvio.com.br/docs/webhooks)
 
-## Tallas de los productos
+## Colores, tallas y existencias por variante
 
-En **Productos → Nuevo producto**, elige una categoría y marca una o varias tallas; las tablas muestran sus anchuras en pulgadas. Las categorías sin opciones predefinidas permiten introducir tallas separadas por comas. Puedes guardar hasta 20 tallas por producto y añadir o quitar opciones al editarlo. Al cambiar de categoría se conservan únicamente las opciones compatibles con la nueva categoría.
+En **Productos → Nuevo producto**, registra una ficha por modelo y estampa, elige la categoría y configura las combinaciones de color y talla en la cuadrícula. Camisetas y sudaderas ofrecen S, L, XL y XXL; las tablas usan anchuras en pulgadas. Cada combinación tiene su propio SKU, existencias físicas, reservas, disponibilidad y aviso de reposición. El SKU puede generarse automáticamente. El precio general se hereda, con una excepción opcional por variante, y las fotos se pueden asociar a cada color.
 
-La lista aparece en los detalles del catálogo y en Productos e Inventario. Todas las tallas comparten el SKU, el precio y las existencias totales del producto; no se registra una talla elegida en el carrito o el pedido. Los productos anteriores conservan su talla al actualizarse. La API devuelve `sizes` como una lista y mantiene `size` como su primer valor para clientes anteriores; las ediciones que omiten ambos campos conservan la selección existente.
+Una combinación con cero unidades está agotada; una combinación desmarcada no se ofrece. Las existencias iniciales de los productos nuevos se registran con su movimiento. Las reposiciones, correcciones y devoluciones posteriores se realizan en **Inventario**, con motivo y responsable. Editar el nombre, el precio o las fotos no sustituye el saldo de una variante existente. Las combinaciones con unidades o reservas se deben resolver antes de retirarlas.
+
+En cada celda, **Precio y aviso** permite cambiar el precio o el umbral de reposición de esa combinación. **Aviso para nuevas variaciones**, en Logística y configuración, define el valor inicial de las combinaciones nuevas. Desmarcar una combinación existente la desactiva y conserva su historial y saldo; retirar un tamaño conserva también sus combinaciones anteriores inactivas.
+
+En la tienda, el cliente elige el color y la talla disponibles. La selección cambia las fotos, el precio y la disponibilidad; carrito y pedido conservan el SKU, el color y la talla comprados. Dos combinaciones del mismo producto son líneas distintas. Las reservas, ventas, cancelaciones y reembolsos operan sobre la combinación correspondiente.
+
+### Migración de productos existentes
+
+La actualización del esquema es automática e idempotente y conserva el saldo, las reservas, los movimientos y los pedidos anteriores. No reparte ni multiplica el saldo compartido: en el editor del producto existente, distribuye sus unidades físicas entre las combinaciones después de contarlas. La suma debe coincidir exactamente con el saldo anterior y no puede haber reservas antiguas pendientes; espera al pago, cancelación o caducidad de esos pedidos antes de convertirlo. Los carritos antiguos de ese producto se vacían al convertirlo para que el cliente elija una combinación.
+
+Los pedidos históricos conservan sus datos originales. Si un reembolso de un pedido anterior a la conversión devuelve unidades sin color o talla conocidos, quedan como **existencias sin asignar**. Distribúyelas desde Inventario tras comprobar la pieza; no estarán disponibles para vender una variante hasta que se asignen. Los clientes antiguos de la API que omiten `variants` conservan el modo anterior; las combinaciones de productos convertidos siempre requieren `variant_id` en el carrito.
 
 ## Fotos de los productos
 
 En el panel **Productos**, abre el editor y sube archivos JPEG, PNG o WebP de hasta 5 MB por archivo y ocho fotos por producto. La primera foto es la portada. Guarda el producto después de subir las fotos; se pueden eliminar imágenes de la galería desde el editor.
+
+Además de la galería general, cada color admite hasta ocho fotos propias compartidas por sus tallas. Al seleccionar un color en la tienda se utiliza esa galería; si no existe, se muestran las fotos generales. Si solo hay fotos por color, la primera variante activa con fotos aporta la portada del catálogo.
 
 El servidor decodifica la imagen, limita el número de píxeles, corrige la orientación, reduce el tamaño hasta 1280 px y genera un JPEG sin metadatos. No se aceptan archivos SVG ni archivos no válidos. La foto optimizada se guarda en SQLite, en el mismo almacenamiento persistente de la aplicación; por tanto, las copias de seguridad también incluyen las imágenes. Los archivos subidos sin asociación pueden permanecer almacenados y requieren una futura limpieza administrativa.
 

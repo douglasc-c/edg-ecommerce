@@ -12,6 +12,7 @@ import { commerce } from '../src/commerce.mjs';
 import { providers } from '../src/providers.mjs';
 import { configuration, createApp } from '../src/server.mjs';
 import { hash, now } from '../src/security.mjs';
+import { initializeLegacy, insertLegacyProduct } from './legacy-schema.mjs';
 
 const config=configuration({COMMERCE_MODE:'catalog',APP_URL:'http://localhost:3000'});
 
@@ -150,17 +151,13 @@ for(const existingCategories of [false,true]) {
   test(`una base v3 ${existingCategories?'con':'sin'} tabla de categorías conserva y completa su catálogo`,t=>{
     const db=new DatabaseSync(':memory:');
     t.after(()=>db.close());
-    db.exec(`PRAGMA foreign_keys=ON;
-      CREATE TABLE schema_version(version INTEGER PRIMARY KEY);
-      INSERT INTO schema_version VALUES(1),(2),(3);
-      CREATE TABLE products(id TEXT PRIMARY KEY,name TEXT,category TEXT,size TEXT,images TEXT,fiscal TEXT);
-      INSERT INTO products VALUES('old-product','Producto heredado','Heredada','M','[]','{}');
-      CREATE TABLE media(id TEXT PRIMARY KEY,data BLOB NOT NULL,actor_id TEXT NOT NULL REFERENCES users(id),created_at TEXT NOT NULL);
-    `);
-    if(existingCategories)db.exec("CREATE TABLE categories(name TEXT PRIMARY KEY COLLATE NOCASE); INSERT INTO categories VALUES('Sin productos');");
+    db.exec('PRAGMA foreign_keys=ON;');
+    initializeLegacy(db,3,{categories:existingCategories});
+    insertLegacyProduct(db,{id:'old-product',size:'M'});
+    if(existingCategories)db.exec("INSERT INTO categories VALUES('Sin productos');");
     initialize(db);
     initialize(db);
-    assert.equal(db.prepare('SELECT MAX(version) version FROM schema_version').get().version,7);
+    assert.equal(db.prepare('SELECT MAX(version) version FROM schema_version').get().version,8);
     const shop=commerce(db,config,providers(config)),legacy=shop.categories().find(row=>row.name==='Heredada');
     assert.equal(legacy.image_id,null);
     assert.equal(legacy.image,null);

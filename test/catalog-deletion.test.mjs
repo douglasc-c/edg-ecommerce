@@ -10,6 +10,7 @@ import { commerce } from '../src/commerce.mjs';
 import { providers } from '../src/providers.mjs';
 import { configuration, createApp } from '../src/server.mjs';
 import { hash, now } from '../src/security.mjs';
+import { initializeLegacy, insertLegacyProduct } from './legacy-schema.mjs';
 
 const config=configuration({COMMERCE_MODE:'demo',APP_URL:'http://localhost:3000'});
 const address={name:'Cliente de prueba',phone:'41999999999',document:'12345678901',
@@ -224,17 +225,17 @@ test('la migración v4 conserva productos, reservas e imágenes y se puede repet
   const db=new DatabaseSync(':memory:');
   t.after(()=>db.close());
   const imageId=hash('legacy selected category');
-  db.exec(`CREATE TABLE schema_version(version INTEGER PRIMARY KEY);
-    INSERT INTO schema_version VALUES(1),(2),(3),(4);
-    CREATE TABLE products(id TEXT PRIMARY KEY,name TEXT,category TEXT,stock INTEGER,reserved INTEGER,size TEXT NOT NULL DEFAULT '');
-    INSERT INTO products VALUES('legacy','Producto heredado','Heredada',10,2,'');
-    CREATE TABLE categories(name TEXT PRIMARY KEY COLLATE NOCASE,image_id TEXT);
-  `);
+  initializeLegacy(db,4);
+  insertLegacyProduct(db);
+  db.prepare('INSERT INTO users(id,name,email,password,role,created_at) VALUES(?,?,?,?,?,?)')
+    .run('legacy-admin','Administrador','legacy@example.test','unused','admin',now());
+  db.prepare('INSERT INTO media(id,data,actor_id,created_at) VALUES(?,?,?,?)')
+    .run(imageId,Buffer.from('legacy image'),'legacy-admin',now());
   db.prepare('INSERT INTO categories VALUES(?,?)').run('Heredada',imageId);
   migrate(db);
   migrate(db);
-  assert.equal(db.prepare('SELECT MAX(version) version FROM schema_version').get().version,7);
-  assert.deepEqual({...db.prepare('SELECT * FROM products').get()},
+  assert.equal(db.prepare('SELECT MAX(version) version FROM schema_version').get().version,8);
+  assert.deepEqual({...db.prepare('SELECT id,name,category,stock,reserved,size,deleted_at,sizes FROM products').get()},
     {id:'legacy',name:'Producto heredado',category:'Heredada',stock:10,reserved:2,size:'',deleted_at:null,sizes:'[]'});
   assert.equal(db.prepare('SELECT image_id FROM categories').get().image_id,imageId);
   assert.equal(db.prepare('SELECT COUNT(*) n FROM schema_version WHERE version=5').get().n,1);

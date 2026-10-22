@@ -10,6 +10,7 @@ import { migrate } from '../src/migrations.mjs';
 import { commerce } from '../src/commerce.mjs';
 import { providers } from '../src/providers.mjs';
 import { now } from '../src/security.mjs';
+import { initializeLegacy, insertLegacyProduct } from './legacy-schema.mjs';
 
 const config={mode:'demo',reservationMinutes:30};
 const input={sku:'SIZES-1',name:'Camiseta de prueba',description:'Producto con varias tallas',
@@ -202,11 +203,9 @@ for(const transactionSync of [false,true]) {
   test(`la migración v7 conserva tallas y existencias y se repite con ${transactionSync?'transactionSync':'SQLite de Node'}`,t=>{
     const sql=new DatabaseSync(':memory:');
     t.after(()=>sql.close());
-    sql.exec(`CREATE TABLE schema_version(version INTEGER PRIMARY KEY);
-      INSERT INTO schema_version VALUES(1),(2),(3),(4),(5),(6);
-      CREATE TABLE products(id TEXT PRIMARY KEY,size TEXT NOT NULL,stock INTEGER,reserved INTEGER,deleted_at TEXT);`);
+    initializeLegacy(sql,6);
     for(const [id,size,deleted] of [['legacy','Único',null],['quote','8.25" / 21 cm',null],['empty','',null],['deleted','GG','2026-01-01']]) {
-      sql.prepare('INSERT INTO products VALUES(?,?,10,2,?)').run(id,size,deleted);
+      insertLegacyProduct(sql,{id,size,deleted_at:deleted});
     }
     const before=sql.prepare('SELECT * FROM products ORDER BY id').all();
     let transactions=0;
@@ -221,9 +220,9 @@ for(const transactionSync of [false,true]) {
     migrate(db);
     migrate(db);
     const after=sql.prepare('SELECT * FROM products ORDER BY id').all();
-    assert.deepEqual(after.map(({sizes,...product})=>product),before.map(product=>({...product})));
+    assert.deepEqual(after.map(product=>Object.fromEntries(Object.keys(before[0]).map(key=>[key,product[key]]))),before.map(product=>({...product})));
     for(const product of after)assert.deepEqual(JSON.parse(product.sizes),product.size?[product.size]:[]);
-    assert.equal(sql.prepare('SELECT MAX(version) v FROM schema_version').get().v,7);
+    assert.equal(sql.prepare('SELECT MAX(version) v FROM schema_version').get().v,8);
     assert.equal(sql.prepare('SELECT COUNT(*) n FROM schema_version WHERE version=7').get().n,1);
     sql.prepare('UPDATE products SET sizes=? WHERE id=?').run('["S","M"]','legacy');
     migrate(db);

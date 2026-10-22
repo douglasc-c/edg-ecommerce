@@ -113,6 +113,51 @@ function migrateV7(db) {
   try{apply();db.exec('COMMIT');}catch(error){db.exec('ROLLBACK');throw error;}
 }
 
+// La reserva histórica permanece en products hasta asignar expresamente su saldo.
+function migrateV8(db) {
+  const apply=()=>{
+    if(db.prepare('SELECT MAX(version) v FROM schema_version').get().v>=8)return;
+    db.exec(`
+      ALTER TABLE products ADD COLUMN variants_enabled INTEGER NOT NULL DEFAULT 0 CHECK(variants_enabled IN (0,1));
+      CREATE TABLE product_variants(
+        id TEXT PRIMARY KEY, product_id TEXT NOT NULL REFERENCES products(id), sku TEXT NOT NULL UNIQUE,
+        color_name TEXT NOT NULL, color_key TEXT NOT NULL, color_hex TEXT NOT NULL, size TEXT NOT NULL DEFAULT '',
+        price_override INTEGER CHECK(price_override IS NULL OR price_override>0),
+        stock INTEGER NOT NULL DEFAULT 0 CHECK(stock>=0),
+        reserved INTEGER NOT NULL DEFAULT 0 CHECK(reserved>=0 AND reserved<=stock),
+        low_stock INTEGER NOT NULL DEFAULT 5 CHECK(low_stock>=0),
+        active INTEGER NOT NULL DEFAULT 1 CHECK(active IN (0,1)),
+        images TEXT NOT NULL DEFAULT '[]', deleted_at TEXT, created_at TEXT NOT NULL);
+      CREATE UNIQUE INDEX idx_variant_combination ON product_variants(product_id,color_key,size) WHERE deleted_at IS NULL;
+      CREATE INDEX idx_variants_product ON product_variants(product_id);
+      CREATE TABLE carts_v8(user_id TEXT NOT NULL REFERENCES users(id),product_id TEXT NOT NULL REFERENCES products(id),
+        quantity INTEGER NOT NULL CHECK(quantity>0 AND quantity<=99),variant_key TEXT NOT NULL DEFAULT '',
+        variant_id TEXT REFERENCES product_variants(id),PRIMARY KEY(user_id,product_id,variant_key),
+        CHECK(variant_key=COALESCE(variant_id,'')));
+      INSERT INTO carts_v8(user_id,product_id,quantity) SELECT user_id,product_id,quantity FROM carts;
+      DROP TABLE carts;
+      ALTER TABLE carts_v8 RENAME TO carts;
+      CREATE TABLE order_items_v8(order_id TEXT NOT NULL REFERENCES orders(id),product_id TEXT NOT NULL REFERENCES products(id),
+        sku TEXT NOT NULL,name TEXT NOT NULL,price INTEGER NOT NULL,cost INTEGER NOT NULL,quantity INTEGER NOT NULL,
+        weight REAL NOT NULL,width REAL NOT NULL,height REAL NOT NULL,length REAL NOT NULL,fiscal TEXT NOT NULL DEFAULT '{}',
+        variant_key TEXT NOT NULL DEFAULT '',variant_id TEXT REFERENCES product_variants(id),
+        selected_color TEXT NOT NULL DEFAULT '',selected_size TEXT NOT NULL DEFAULT '',
+        PRIMARY KEY(order_id,product_id,variant_key),CHECK(variant_key=COALESCE(variant_id,'')));
+      INSERT INTO order_items_v8(order_id,product_id,sku,name,price,cost,quantity,weight,width,height,length,fiscal)
+        SELECT order_id,product_id,sku,name,price,cost,quantity,weight,width,height,length,fiscal FROM order_items;
+      DROP TABLE order_items;
+      ALTER TABLE order_items_v8 RENAME TO order_items;
+      ALTER TABLE movements ADD COLUMN variant_id TEXT REFERENCES product_variants(id);
+      ALTER TABLE movements ADD COLUMN selected_color TEXT NOT NULL DEFAULT '';
+      ALTER TABLE movements ADD COLUMN selected_size TEXT NOT NULL DEFAULT '';
+      INSERT INTO schema_version VALUES(8);
+    `);
+  };
+  if(db.transactionSync)return db.transactionSync(apply);
+  db.exec('BEGIN IMMEDIATE');
+  try{apply();db.exec('COMMIT');}catch(error){db.exec('ROLLBACK');throw error;}
+}
+
 export function migrate(db) {
   migrateV2(db);
   migrateV3(db);
@@ -120,4 +165,5 @@ export function migrate(db) {
   migrateV5(db);
   migrateV6(db);
   migrateV7(db);
+  migrateV8(db);
 }

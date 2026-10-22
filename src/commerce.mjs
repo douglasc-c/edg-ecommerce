@@ -1,5 +1,6 @@
 import { categorySizes, isClothingCategory, productSizes, productSizesForSave } from './product-sizes.mjs';
 import { randomUUID } from 'node:crypto';
+import { productVariants } from './product-variants.mjs';
 import { transaction } from './db.mjs';
 import { coupons } from './coupons.mjs';
 import { photoIds } from './media.mjs';
@@ -11,20 +12,54 @@ export function commerce(db,config,provider) {
   const event=(id,status,message)=>run('INSERT INTO order_events(order_id,status,message,created_at) VALUES(?,?,?,?)',id,status,message,now());
   const audit=(actor,action,id,details={})=>run('INSERT INTO audit(actor_id,action,entity_id,details,created_at) VALUES(?,?,?,?,?)',actor,action,id,JSON.stringify(details),now());
   const discounts=coupons(db,audit);
+  const variants=productVariants(db,audit);
   const locks=new Set();
   async function locked(key,fn) {
     requireThat(!locks.has(key),409,'Hay una operación en curso para este pedido. Espera e inténtalo de nuevo.');
     locks.add(key); try{return await fn();}finally{locks.delete(key);}
   }
-  function cart(userId) {
-    const items=all('SELECT p.*,c.quantity FROM carts c JOIN products p ON p.id=c.product_id WHERE user_id=? AND p.deleted_at IS NULL ORDER BY p.id',userId);
-    return {items:items.map(p=>({...publicProduct(p),quantity:p.quantity,active:p.active})),subtotal:items.reduce((s,p)=>s+p.price*p.quantity,0)};
+  function rawCart(userId) {
+    return all('SELECT p.*,c.quantity,c.variant_id FROM carts c JOIN products p ON p.id=c.product_id WHERE user_id=? AND p.deleted_at IS NULL ORDER BY p.id,c.variant_key',userId).map(p=>{
+      if(!p.variant_id)return {...p,selected_color:'',selected_size:''};
+      const v=one('SELECT * FROM product_variants WHERE id=? AND product_id=?',p.variant_id,p.id);
+      return {...p,base_product:p,sku:v?.sku??p.sku,price:v?.price_override??p.price,
+        stock:v?.stock??0,reserved:v?.reserved??0,variant_active:!!v?.active&&!v?.deleted_at,
+        selected_color:v?.color_name??'',selected_size:v?.size??'',
+        images:v&&JSON.parse(v.images).length?v.images:p.images};
+    });
   }
-  function rawCart(userId) {return all('SELECT p.*,c.quantity FROM carts c JOIN products p ON p.id=c.product_id WHERE user_id=? AND p.deleted_at IS NULL ORDER BY p.id',userId);}
-  function fingerprint(items) {return hash(JSON.stringify(items.map(p=>[p.id,p.price,p.quantity,p.active,p.weight,p.width,p.height,p.length])));}
-  function validCart(items) {requireThat(items.length>0 && items.length<=100,400,'El carrito está vacío o supera el límite.'); for(const p of items) requireThat(!p.deleted_at && p.active && p.stock-p.reserved>=p.quantity,409,`Existencias insuficientes para ${p.name}.`);}
-  function publicProduct(p) {const sizes=productSizes(p);return {id:p.id,sku:p.sku,name:p.name,description:p.description,category:p.category,size:sizes[0]||'',sizes,price:p.price,available:p.stock-p.reserved,color:p.color,icon:p.icon,images:JSON.parse(p.images).map(id=>`/media/${id}.jpg`)};}
-  function adminProduct(p) {const sizes=productSizes(p);return {...p,size:sizes[0]||'',sizes};}
+  function cart(userId) {
+    const items=rawCart(userId);
+    return {items:items.map(p=>({...publicProduct(p.base_product??p),sku:p.sku,price:p.price,
+      images:JSON.parse(p.images).map(id=>`/media/${id}.jpg`),quantity:p.quantity,
+      active:!!p.active&&(!p.variant_id||p.variant_active),available:p.stock-p.reserved,
+      variant_id:p.variant_id,selected_color:p.selected_color,selected_size:p.selected_size})),
+      subtotal:items.reduce((sum,p)=>sum+p.price*p.quantity,0)};
+  }
+  function fingerprint(items) {return hash(JSON.stringify(items.map(p=>[p.id,p.variant_id,p.sku,p.selected_color,p.selected_size,p.price,p.quantity,p.active,p.variant_active,p.variants_enabled,p.weight,p.width,p.height,p.length])));}
+  function validCart(items) {
+    requireThat(items.length>0 && items.length<=100,400,'El carrito está vacío o supera el límite.');
+    for(const p of items)requireThat(!p.deleted_at&&p.active&&(p.variant_id?p.variants_enabled&&p.variant_active:!p.variants_enabled)&&p.stock-p.reserved>=p.quantity,409,`Existencias insuficientes para ${p.name}${p.selected_color?' · '+p.selected_color+' · '+p.selected_size:''}. Revisa la selección del carrito.`);
+  }
+  function publicProduct(p) {const sizes=productSizes(p);return {id:p.id,sku:p.sku,name:p.name,description:p.description,category:p.category,size:sizes[0]||'',sizes,price:p.price,color:p.color,icon:p.icon,images:JSON.parse(p.images).map(id=>`/media/${id}.jpg`),...variants.serialize(p)};}
+  function adminProduct(p) {const sizes=productSizes(p);return {...p,size:sizes[0]||'',sizes,...variants.serialize(p,true)};}
+  function updateBalance(item,stockDelta,reservedDelta=0) {
+    const table=item.variant_id?'product_variants':'products',id=item.variant_id??item.product_id??item.id;
+    run(`UPDATE ${table} SET stock=stock+?,reserved=reserved+? WHERE id=?`,stockDelta,reservedDelta,id);
+  }
+  function itemAvailable(item) {
+    if(item.variant_id) {
+      const v=one('SELECT stock-reserved available,active,deleted_at FROM product_variants WHERE id=?',item.variant_id);
+      const p=one('SELECT active,deleted_at FROM products WHERE id=?',item.product_id);
+      return v&&v.active&&!v.deleted_at&&p?.active&&!p.deleted_at?v.available:0;
+    }
+    const p=one('SELECT stock-reserved available,variants_enabled FROM products WHERE id=?',item.product_id);
+    return p&&!p.variants_enabled?p.available:0;
+  }
+  function itemMovement(item,quantity,reason,reference) {
+    const v=item.variant_id?{id:item.variant_id,color_name:item.selected_color,size:item.selected_size}:null;
+    variants.movement({id:item.product_id},v,quantity,reason,null,reference);
+  }
   const categoryRows='SELECT names.name,c.image_id FROM (SELECT name FROM categories UNION SELECT category AS name FROM products WHERE deleted_at IS NULL) names LEFT JOIN categories c ON c.name=names.name';
   const categoryImage=c=>({...c,image:c.image_id?`/media/${c.image_id}.jpg`:null});
   function order(id,user=null,manage=false) {
@@ -33,7 +68,7 @@ export function commerce(db,config,provider) {
     return {...o,address:JSON.parse(o.address),shipping_service:JSON.parse(o.shipping_service),items:all('SELECT * FROM order_items WHERE order_id=?',id),events:all('SELECT * FROM order_events WHERE order_id=? ORDER BY id',id)};
   }
   function release(o,status,message) {
-    for(const item of all('SELECT * FROM order_items WHERE order_id=?',o.id)) run('UPDATE products SET reserved=reserved-? WHERE id=?',item.quantity,item.product_id);
+    for(const item of all('SELECT * FROM order_items WHERE order_id=?',o.id))updateBalance(item,0,-item.quantity);
     discounts.release(o.id);
     run('UPDATE orders SET status=?,updated_at=? WHERE id=?',status,now(),o.id); event(o.id,status,message);
   }
@@ -45,8 +80,16 @@ export function commerce(db,config,provider) {
   }
   function returnStock(o) {
     for(const item of all('SELECT * FROM order_items WHERE order_id=?',o.id)) {
-      run('UPDATE products SET stock=stock+? WHERE id=?',item.quantity,item.product_id);
-      run('INSERT INTO movements(product_id,quantity,reason,reference,created_at) VALUES(?,?,?,?,?)',item.product_id,item.quantity,'Reembolso antes del envío',o.id,now());
+      const retired=item.variant_id&&one('SELECT deleted_at FROM product_variants WHERE id=?',item.variant_id)?.deleted_at;
+      if(retired) {
+        // La combinación puede haberse sustituido. Devuelve el saldo al reparto pendiente.
+        updateBalance({...item,variant_id:null},item.quantity);
+        variants.movement({id:item.product_id},{id:null,color_name:item.selected_color,size:item.selected_size},item.quantity,'Reembolso de variante retirada; pendiente de distribuir',null,o.id);
+        audit(null,'stock.retired_variant_return',item.product_id,{variant_id:item.variant_id,quantity:item.quantity,order_id:o.id});
+      } else {
+        updateBalance(item,item.quantity);
+        itemMovement(item,item.quantity,'Reembolso antes del envío',o.id);
+      }
     }
   }
   function applyPayment(payment) {
@@ -64,14 +107,14 @@ export function commerce(db,config,provider) {
         const items=all('SELECT * FROM order_items WHERE order_id=?',o.id);
         let status='paid';
         if(o.status==='awaiting_payment') {
-          for(const i of items) run('UPDATE products SET stock=stock-?,reserved=reserved-? WHERE id=?',i.quantity,i.quantity,i.product_id);
+          for(const i of items)updateBalance(i,-i.quantity,-i.quantity);
         } else if(o.status==='expired') {
-          const available=items.every(i=>one('SELECT stock-reserved available FROM products WHERE id=?',i.product_id).available>=i.quantity);
-          if(available) for(const i of items) run('UPDATE products SET stock=stock-? WHERE id=?',i.quantity,i.product_id);
+          const available=items.every(i=>itemAvailable(i)>=i.quantity);
+          if(available)for(const i of items)updateBalance(i,-i.quantity);
           else status='payment_review';
         } else status='payment_review';
         discounts.used(o.id);
-        if(status==='paid') for(const i of items) run('INSERT INTO movements(product_id,quantity,reason,reference,created_at) VALUES(?,?,?,?,?)',i.product_id,-i.quantity,'Venta confirmada',o.id,now());
+        if(status==='paid')for(const i of items)itemMovement(i,-i.quantity,'Venta confirmada',o.id);
         run("UPDATE orders SET status=?,payment_status='approved',payment_id=?,updated_at=? WHERE id=?",status,pid,now(),o.id);
         run("INSERT OR IGNORE INTO ledger(order_id,type,amount,description,reference,created_at) VALUES(?,'income',?,?,?,?)",o.id,o.total,`Venta #${o.number}`,`payment-${pid}`,now());
         event(o.id,status,status==='paid'?'Pago confirmado.':'Pago recibido sin existencias reservadas. Atención al cliente debe gestionar el reembolso.');
@@ -126,12 +169,23 @@ export function commerce(db,config,provider) {
     audit, expire, applyPayment, applyTracking, order, coupons:discounts,
     products(admin=false) {return admin?all('SELECT *,stock-reserved available FROM products WHERE deleted_at IS NULL ORDER BY created_at DESC').map(adminProduct):all('SELECT * FROM products WHERE active=1 AND deleted_at IS NULL ORDER BY created_at DESC').map(publicProduct);},
     cart,
-    setCart(user,id,quantity) {
-      integer(quantity,'Cantidad',0,99); expire();
-      const p=one('SELECT * FROM products WHERE id=? AND active=1 AND deleted_at IS NULL',id); requireThat(p,404,'Producto no encontrado.');
-      requireThat(!quantity || quantity<=p.stock-p.reserved,409,'Cantidad no disponible.');
-      if(quantity) run('INSERT INTO carts VALUES(?,?,?) ON CONFLICT(user_id,product_id) DO UPDATE SET quantity=excluded.quantity',user.id,id,quantity);
-      else run('DELETE FROM carts WHERE user_id=? AND product_id=?',user.id,id);
+    setCart(user,id,quantity,variantId=null) {
+      integer(quantity,'Cantidad',0,99);expire();
+      requireThat(variantId===null||variantId===undefined||typeof variantId==='string',400,'Variante no válida.');
+      variantId=variantId||null;
+      const p=one('SELECT * FROM products WHERE id=? AND deleted_at IS NULL',id);requireThat(p,404,'Producto no encontrado.');
+      if(quantity) {
+        requireThat(p.active,404,'Producto no encontrado.');
+        if(p.variants_enabled) {
+          requireThat(variantId,400,'Selecciona un color y una talla antes de añadir el producto.');
+          const v=one('SELECT * FROM product_variants WHERE id=? AND product_id=? AND active=1 AND deleted_at IS NULL',variantId,id);
+          requireThat(v,404,'Variante no encontrada.');requireThat(quantity<=v.stock-v.reserved,409,'Cantidad no disponible para este color y talla.');
+        } else {
+          requireThat(!variantId,400,'Este producto todavía no tiene variantes.');
+          requireThat(quantity<=p.stock-p.reserved,409,'Cantidad no disponible.');
+        }
+        run('INSERT INTO carts(user_id,product_id,quantity,variant_key,variant_id) VALUES(?,?,?,?,?) ON CONFLICT(user_id,product_id,variant_key) DO UPDATE SET quantity=excluded.quantity',user.id,id,quantity,variantId??'',variantId);
+      } else run('DELETE FROM carts WHERE user_id=? AND product_id=? AND variant_key=?',user.id,id,variantId??'');
       return cart(user.id);
     },
     async quote(user,postalCode) {
@@ -158,8 +212,8 @@ export function commerce(db,config,provider) {
         run("INSERT INTO orders(id,number,user_id,status,subtotal,shipping,total,address,shipping_service,idempotency_key,request_hash,reserved_until,created_at,updated_at) VALUES(?,?,?,'awaiting_payment',?,?,?,?,?,?,?,?,?,?)",id,number,user.id,subtotal,service.price,subtotal-coupon.discount+service.price,JSON.stringify(a),JSON.stringify(service),key,requestHash,until,time,time);
         run('UPDATE orders SET discount=?,coupon_code=? WHERE id=?',coupon.discount,coupon.code,id);discounts.reserve(id,user.id,coupon.code);
         for(const p of items) {
-          run('UPDATE products SET reserved=reserved+? WHERE id=?',p.quantity,p.id);
-          run('INSERT INTO order_items(order_id,product_id,sku,name,price,cost,quantity,weight,width,height,length,fiscal) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)',id,p.id,p.sku,p.name,p.price,p.cost,p.quantity,p.weight,p.width,p.height,p.length,p.fiscal);
+          updateBalance(p,0,p.quantity);
+          run('INSERT INTO order_items(order_id,product_id,sku,name,price,cost,quantity,weight,width,height,length,fiscal,variant_key,variant_id,selected_color,selected_size) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)',id,p.id,p.sku,p.name,p.price,p.cost,p.quantity,p.weight,p.width,p.height,p.length,p.fiscal,p.variant_id??'',p.variant_id??null,p.selected_color,p.selected_size);
         }
         run('DELETE FROM carts WHERE user_id=?',user.id); event(id,'awaiting_payment','Pedido creado y existencias reservadas.');
         return one('SELECT * FROM orders WHERE id=?',id);
@@ -222,7 +276,7 @@ export function commerce(db,config,provider) {
       if(input.images!==undefined)p.images=photoIds(db,input.images);
       if(input.fiscal!==undefined)p.fiscal=JSON.stringify(fiscalFields(input.fiscal));
       requireThat(/^#[a-fA-F0-9]{6}$/.test(p.color),400,'Color no válido.');
-      requireThat(!one('SELECT id FROM products WHERE sku=? AND id!=?',p.sku,id||''),409,'SKU ya registrado.');
+      requireThat(!one('SELECT id FROM products WHERE sku=? AND id!=?',p.sku,id||'')&&!one('SELECT id FROM product_variants WHERE sku=?',p.sku),409,'SKU ya registrado.');
       return transaction(db,()=>{
         const current=id?one('SELECT * FROM products WHERE id=? AND deleted_at IS NULL',id):null;
         requireThat(!id || current,404,'Producto no encontrado.');
@@ -231,6 +285,10 @@ export function commerce(db,config,provider) {
         run('INSERT OR IGNORE INTO categories(name) VALUES(?)',p.category);
         if(id) {run(`UPDATE products SET ${Object.keys(p).map(k=>`${k}=?`).join(',')} WHERE id=?`,...Object.values(p),id);}
         else {id=randomUUID(); run(`INSERT INTO products(id,${Object.keys(p).join(',')},created_at) VALUES(${Array(Object.keys(p).length+2).fill('?').join(',')})`,id,...Object.values(p),now());}
+        const updated=one('SELECT * FROM products WHERE id=?',id);
+        const legacyEcho=input.variants_enabled===false&&!current?.variants_enabled&&Array.isArray(input.variants)&&input.variants.length===0;
+        if(input.variants!==undefined&&!legacyEcho)variants.save(user,updated,input.variants,current);
+        else if(current?.variants_enabled)requireThat(variants.rows(id).every(v=>!v.active||(sizes.length?sizes.includes(v.size):v.size==='')),409,'Actualiza también las variantes al cambiar las tallas.');
         audit(user.id,'product.save',id); return adminProduct(one('SELECT * FROM products WHERE id=?',id));
       });
     },
@@ -241,16 +299,23 @@ export function commerce(db,config,provider) {
         const deletedAt=now();
         run('UPDATE products SET active=0,deleted_at=? WHERE id=?',deletedAt,id);
         run('DELETE FROM carts WHERE product_id=?',id);
-        audit(user.id,'product.delete',id,{sku:p.sku,name:p.name,category:p.category,stock:p.stock,reserved:p.reserved,deleted_at:deletedAt});
+        const inventory=variants.serialize(p,true);
+        audit(user.id,'product.delete',id,{sku:p.sku,name:p.name,category:p.category,stock:inventory.stock,reserved:inventory.reserved,unallocated_stock:inventory.unallocated_stock,variants:inventory.variants.map(v=>({id:v.id,sku:v.sku,stock:v.stock,reserved:v.reserved})),deleted_at:deletedAt});
         return {ok:true,id};
       });
     },
     stock(user,id,delta,reason) {
       integer(delta,'Variación',-100000,100000); requireThat(delta!==0,400,'Introduce una variación distinta de cero.'); text(reason,'Motivo',3,250);
-      return transaction(db,()=>{const p=one('SELECT * FROM products WHERE id=? AND deleted_at IS NULL',id); requireThat(p,404,'Producto no encontrado.'); requireThat(p.stock+delta>=p.reserved,409,'El ajuste no puede consumir existencias reservadas.');
+      return transaction(db,()=>{const p=one('SELECT * FROM products WHERE id=? AND deleted_at IS NULL',id); requireThat(p,404,'Producto no encontrado.');requireThat(!p.variants_enabled,409,'Selecciona la combinación de color y talla para ajustar sus existencias.'); requireThat(p.stock+delta>=p.reserved,409,'El ajuste no puede consumir existencias reservadas.');
         run('UPDATE products SET stock=stock+? WHERE id=?',delta,id); run('INSERT INTO movements(product_id,quantity,reason,actor_id,created_at) VALUES(?,?,?,?,?)',id,delta,reason,user.id,now()); audit(user.id,'stock.adjust',id,{delta,reason}); return adminProduct(one('SELECT * FROM products WHERE id=?',id));});
     },
-    movements() {return all('SELECT m.*,p.name product_name,u.name actor_name FROM movements m JOIN products p ON p.id=m.product_id LEFT JOIN users u ON u.id=m.actor_id ORDER BY m.id DESC LIMIT 200');},
+    variantStock(user,id,variantId,delta,reason) {
+      return transaction(db,()=>{const p=one('SELECT * FROM products WHERE id=? AND deleted_at IS NULL',id);requireThat(p,404,'Producto no encontrado.');variants.adjust(user,p,variantId,delta,reason);return adminProduct(one('SELECT * FROM products WHERE id=?',id));});
+    },
+    allocateVariants(user,id,allocations,reason) {
+      return transaction(db,()=>{const p=one('SELECT * FROM products WHERE id=? AND deleted_at IS NULL',id);requireThat(p,404,'Producto no encontrado.');variants.allocate(user,p,allocations,reason);return adminProduct(one('SELECT * FROM products WHERE id=?',id));});
+    },
+    movements() {return all('SELECT m.*,p.name product_name,v.sku variant_sku,u.name actor_name FROM movements m JOIN products p ON p.id=m.product_id LEFT JOIN product_variants v ON v.id=m.variant_id LEFT JOIN users u ON u.id=m.actor_id ORDER BY m.id DESC LIMIT 200');},
     status(user,id,status,input={}) {
       return transaction(db,()=>{const o=order(id,user,true);
         const allowed={paid:['picking'],picking:['ready'],ready:['shipped'],shipped:['delivered']};
@@ -292,9 +357,11 @@ export function commerce(db,config,provider) {
     },
     dashboard(user) {
       expire(); const financial=['admin','finance'].includes(user.role);
-      const metrics={products:one('SELECT COUNT(*) n FROM products WHERE active=1 AND deleted_at IS NULL').n,low_stock:one('SELECT COUNT(*) n FROM products WHERE active=1 AND deleted_at IS NULL AND stock-reserved<=low_stock').n,orders:one('SELECT COUNT(*) n FROM orders').n,to_ship:one("SELECT COUNT(*) n FROM orders WHERE status IN ('paid','picking','ready')").n};
-      if(financial) Object.assign(metrics,{net_revenue:one('SELECT COALESCE(SUM(amount),0) n FROM ledger').n,pending:one("SELECT COALESCE(SUM(total),0) n FROM orders WHERE status='awaiting_payment'").n,inventory_cost:one('SELECT COALESCE(SUM(cost*stock),0) n FROM products WHERE deleted_at IS NULL').n});
-      return {metrics,recent_orders:this.listOrders(user,true).slice(0,6),alerts:all('SELECT id,name,stock,reserved,stock-reserved available,low_stock FROM products WHERE active=1 AND deleted_at IS NULL AND stock-reserved<=low_stock'),revenue:financial?all("SELECT substr(created_at,1,10) day,SUM(amount) amount FROM ledger GROUP BY day ORDER BY day DESC LIMIT 14"):[]};
+      const products=all('SELECT * FROM products WHERE deleted_at IS NULL').map(adminProduct);
+      const alerts=products.filter(p=>p.active).flatMap(p=>p.variants_enabled?p.variants.filter(v=>v.active&&v.available<=v.low_stock).map(v=>({...v,id:p.id,variant_id:v.id,name:`${p.name} · ${v.color_name}${v.size?' · '+v.size:''}`})):p.available<=p.low_stock?[{id:p.id,name:p.name,stock:p.stock,reserved:p.reserved,available:p.available,low_stock:p.low_stock}]:[]);
+      const metrics={products:products.filter(p=>p.active).length,low_stock:alerts.length,orders:one('SELECT COUNT(*) n FROM orders').n,to_ship:one("SELECT COUNT(*) n FROM orders WHERE status IN ('paid','picking','ready')").n};
+      if(financial)Object.assign(metrics,{net_revenue:one('SELECT COALESCE(SUM(amount),0) n FROM ledger').n,pending:one("SELECT COALESCE(SUM(total),0) n FROM orders WHERE status='awaiting_payment'").n,inventory_cost:products.reduce((sum,p)=>sum+p.cost*p.stock,0)});
+      return {metrics,recent_orders:this.listOrders(user,true).slice(0,6),alerts,revenue:financial?all("SELECT substr(created_at,1,10) day,SUM(amount) amount FROM ledger GROUP BY day ORDER BY day DESC LIMIT 14"):[]};
     },
     ledger() {return all('SELECT * FROM ledger ORDER BY id DESC LIMIT 500');},
     expense(user,input,key) {

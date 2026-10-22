@@ -47,7 +47,8 @@ test('cambiar idioma conserva el catálogo, el vídeo y los formularios y traduc
   await page.route('**/api/products',async route=>{
     productRequests++;
     const response=await route.fetch(),products=await response.json();
-    products[0]={...products[0],name:'Inicio',description:'LA COLECCIÓN.',category:'Camiseta',price:12990};
+    products[0]={...products[0],name:'Inicio',description:'LA COLECCIÓN.',category:'Camiseta',price:12990,
+      variants:(products[0].variants||[]).map(variant=>({...variant,price:12990,price_override:null}))};
     products[1]={...products[1],name:customProduct,category:customCategory};
     await route.fulfill({response,json:products});
   });

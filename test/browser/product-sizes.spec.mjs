@@ -45,6 +45,7 @@ test('el administrador guarda y edita las cuatro tallas de ropa y cambia las opc
   }
   await form.locator('[name="price"]').fill('29.90');
   await form.getByLabel('Descripción',{exact:true}).fill(description);
+  await form.getByRole('textbox',{name:'Nombre del color 1',exact:true}).fill('Negro');
   await expect(form.getByRole('group',{name:'Tallas disponibles',exact:true})).toBeVisible();
 
   await form.getByRole('button',{name:'Guardar producto',exact:true}).click();
@@ -86,14 +87,14 @@ test('el administrador guarda y edita las cuatro tallas de ropa y cambia las opc
   for(const size of ['8.0','8.25'])await expect(form.getByRole('checkbox',{name:size,exact:true})).toBeChecked();
 
   await form.getByRole('combobox',{name:'Categoría',exact:true}).selectOption('Papelería');
-  await expect(form.getByRole('checkbox')).toHaveCount(0);
+  await expect(form.locator('.product-size-options input')).toHaveCount(0);
   const freeSizes=form.getByLabel('Tallas (separadas por comas)',{exact:true});
   await expect(freeSizes).toHaveValue('');
   await freeSizes.fill('A5, A4');
   await saveAndReopen();
   await expect(form.getByRole('combobox',{name:'Categoría',exact:true})).toHaveValue('Papelería');
   await expect(freeSizes).toHaveValue('A5, A4');
-  await expect(form.getByRole('checkbox')).toHaveCount(0);
+  await expect(form.locator('.product-size-options input')).toHaveCount(0);
   await expect(form.getByLabel('Nombre',{exact:true})).toHaveValue(name);
   expect(errors).toEqual([]);
 });
@@ -129,6 +130,7 @@ test('en móvil las tallas antiguas no vuelven al editor y se guardan solo las s
     await page.route('**/api/admin/products',legacyResponse);
     await page.reload();
     await row.getByRole('button',{name:'Editar',exact:true}).click();
+    await form.getByRole('textbox',{name:'Nombre del color 1',exact:true}).fill('Negro');
     await expectClothingSizes(form);
     await expect(form.locator('input[name="sizes"]:checked')).toHaveCount(scenario.selected.length);
     for(const size of scenario.selected)await expect(form.getByRole('checkbox',{name:size,exact:true})).toBeChecked();
