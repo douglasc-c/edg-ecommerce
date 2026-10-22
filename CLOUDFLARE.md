@@ -47,6 +47,16 @@ La URL y el correo electrónico se guardan como secretos para que el siguiente d
 
 Abre la tienda. El primer acceso a la API crea el administrador. Inicia sesión con el correo electrónico y la contraseña y abre **Gestión** (o `/#admin`). Tras confirmar el inicio de sesión, puedes eliminar `ADMIN_PASSWORD` con `npx wrangler secret delete ADMIN_PASSWORD`: la cuenta ya está guardada de forma persistente. Cambiar ese secreto después no modifica la contraseña de una cuenta existente; utiliza «Mi cuenta» para cambiarla.
 
+### Cambiar al dominio propio
+
+Al vincular el dominio, actualiza el secreto **APP_URL** en **Workers & Pages → edg-ecommerce → Settings → Variables and Secrets** y aplica los cambios. Para la tienda europea, el origen público es `https://www.edgskateboards.com` (sin rutas ni espacios).
+
+El inicio de sesión comprueba que el origen del navegador coincida exactamente con `APP_URL`. Si conservas la URL anterior de `workers.dev`, el acceso desde el dominio nuevo devuelve **403 «Origen no permitido.»**. `https://edgskateboards.com` y `https://www.edgskateboards.com` son orígenes distintos: utiliza la versión con `www` y configura la redirección del dominio sin `www` hacia ella. Esta comprobación no debe desactivarse.
+
+Después de aplicar el cambio, recarga e inicia sesión en el dominio nuevo. Actualiza también la URL del webhook de Sendcloud a `https://www.edgskateboards.com/api/webhooks/sendcloud` cuando lo actives; los enlaces de recuperación de contraseña utilizan igualmente `APP_URL`.
+
+La política de seguridad permite el script de Cloudflare Web Analytics en `https://static.cloudflareinsights.com` y el envío de métricas a `https://cloudflareinsights.com` o al mismo origen. No habilita scripts inline ni dominios arbitrarios. Referencia: [CSP y Cloudflare Web Analytics](https://developers.cloudflare.com/web-analytics/faq/#what-do-i-need-to-add-to-my-content-security-policy-csp).
+
 ## 4. Preparar los productos y el inventario
 
 1. En **Productos**, registra el SKU base, el nombre, la categoría, la descripción, el precio y el coste en euros. Añade los colores, sus fotos y las combinaciones de talla; cada combinación tiene un SKU y saldo propios. El peso y las dimensiones se conservan en el catálogo. En el módulo de envíos europeos se introduce además el peso y las tres medidas del bulto embalado, que pueden ser distintos de los datos de un producto individual.

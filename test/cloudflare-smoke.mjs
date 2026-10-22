@@ -20,8 +20,11 @@ try{
   mf=create(options);
   const skateAsset=await mf.dispatchFetch(origin+'/skate.js');
   assert.equal(skateAsset.status,200);
-  assert.match(skateAsset.headers.get('content-security-policy'),/frame-src https:\/\/www\.youtube-nocookie\.com;/);
-  assert.match(skateAsset.headers.get('content-security-policy'),/img-src 'self' data: https:\/\/i\.ytimg\.com;/);
+  const assetCsp=skateAsset.headers.get('content-security-policy');
+  assert.match(assetCsp,/frame-src https:\/\/www\.youtube-nocookie\.com;/);
+  assert.match(assetCsp,/img-src 'self' data: https:\/\/i\.ytimg\.com;/);
+  assert.match(assetCsp,/script-src 'self' https:\/\/static\.cloudflareinsights\.com;/);
+  assert.match(assetCsp,/connect-src 'self' https:\/\/cloudflareinsights\.com;/);
   assert.equal(skateAsset.headers.get('referrer-policy'),'strict-origin-when-cross-origin');
   assert.match(await skateAsset.text(),/function skatePage/);
   const musicAsset=await mf.dispatchFetch(origin+'/music.js');
@@ -70,6 +73,7 @@ try{
     const data=await r.json();return {r,data};
   }
   let result=await call('/api/config');assert.equal(result.r.status,200,JSON.stringify(result.data));assert.equal(result.data.mode,'catalog');assert.equal(result.data.currency,'EUR');assert.equal(result.data.language,'es');assert.equal(result.data.locale,'es-ES');assert.equal(result.r.headers.get('content-language'),'es');assert.equal(result.data.checkout_enabled,false);
+  assert.equal(result.r.headers.get('content-security-policy'),assetCsp,'El Worker y la aplicación comparten la misma política de seguridad');
   assert.equal(result.data.suggested_language,'es');assert.equal(result.data.language_source,'default');assert.equal(result.data.country,null);
   for(const [cf,headers,language,source,country] of [
     [{country:'BR'},{'X-EDG-Country':'ES','CF-IPCountry':'ES','Accept-Language':'es-ES'},'pt-BR','country','BR'],
@@ -175,5 +179,19 @@ try{
   senderRedirect=true;
   result=await call('/api/admin/europe-shipping/check','POST');assert.equal(result.r.status,502,JSON.stringify(result.data));
   assert.equal(senderRequests.length,2,'La redirección se rechaza sin una segunda llamada al destino externo');
-  console.log('Workers: idioma, rangos MP4, administración, autorización, fotos, categorías, migración conservativa, variantes de color y talla, inventario independiente, eliminación, bloqueo de ventas, persistencia y conexión Sendcloud sin seguir redirecciones verificados.');
+  // Cambiar el dominio público requiere actualizar APP_URL; no se amplían los orígenes permitidos.
+  const customOrigin='https://www.edgskateboards.com';
+  async function domainLogin(requestOrigin){
+    const r=await mf.dispatchFetch(customOrigin+'/api/auth/login',{method:'POST',headers:{Origin:requestOrigin,'Content-Type':'application/json'},body:JSON.stringify({email:'admin@example.test',password})});
+    return {r,data:await r.json()};
+  }
+  result=await domainLogin(customOrigin);assert.equal(result.r.status,403);assert.equal(result.data.error,'Origen no permitido.');
+  assert.equal(result.r.headers.get('set-cookie'),null,'El origen no configurado no recibe una sesión');
+  await mf.dispose();mf=create({...options,bindings:{...options.bindings,APP_URL:customOrigin}});
+  result=await domainLogin(customOrigin);assert.equal(result.r.status,200,JSON.stringify(result.data));
+  assert.equal(result.data.user.id,login.data.user.id,'Cambiar APP_URL conserva el administrador existente');
+  assert.match(result.r.headers.get('set-cookie'),/edg_session=.*; HttpOnly; SameSite=Strict; Path=\/; Max-Age=86400; Secure/);
+  result=await domainLogin(origin);assert.equal(result.r.status,403);assert.equal(result.data.error,'Origen no permitido.');
+  assert.equal(result.r.headers.get('set-cookie'),null,'El dominio anterior deja de autorizar nuevos inicios de sesión');
+  console.log('Workers: idioma, rangos MP4, administración, autorización, fotos, categorías, migración conservativa, variantes de color y talla, inventario independiente, eliminación, bloqueo de ventas, persistencia, conexión Sendcloud sin seguir redirecciones e inicio de sesión al cambiar APP_URL verificados.');
 }finally{if(mf)await mf.dispose();await rm(directory,{recursive:true,force:true});}
