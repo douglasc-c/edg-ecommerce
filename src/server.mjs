@@ -140,7 +140,7 @@ export function createApp({db=database(),config=configuration(),provider=provide
     }
     if(path==='/api/cart' && method==='GET') return respond(shop.cart(user.id));
     let match;
-    if((match=path.match(/^\/api\/cart\/([^/]+)$/)) && method==='PUT') {const b=await body(req);return respond(shop.setCart(user,match[1],b.quantity));}
+    if((match=path.match(/^\/api\/cart\/([^/]+)$/)) && method==='PUT') {const b=await body(req);return respond(shop.setCart(user,match[1],b.quantity,b.variant_id));}
     if(path==='/api/shipping/quote' && method==='POST') {const b=await body(req);return respond(await shop.quote(user,postal(b.postal_code)));}
     if(path==='/api/coupons/check' && method==='POST') {const b=await body(req);shop.expire();return respond(shop.coupons.calculate(user,shop.cart(user.id).subtotal,b.code));}
     if(path==='/api/checkout' && method==='POST') return respond(await shop.checkout(user,await body(req),req.headers['idempotency-key']),201);
@@ -189,6 +189,8 @@ export function createApp({db=database(),config=configuration(),provider=provide
     if(path==='/api/admin/products' && method==='POST') {allowed(user,'catalog');return respond(shop.saveProduct(user,await body(req)),201);}
     if((match=path.match(/^\/api\/admin\/products\/([^/]+)$/)) && method==='PUT') {allowed(user,'catalog');return respond(shop.saveProduct(user,await body(req),match[1]));}
     if((match=path.match(/^\/api\/admin\/products\/([^/]+)$/)) && method==='DELETE') {allowed(user,'catalog');return respond(shop.deleteProduct(user,match[1]));}
+    if((match=path.match(/^\/api\/admin\/products\/([^/]+)\/variants\/allocate$/)) && method==='POST') {allowed(user,'stock');const b=await body(req);return respond(shop.allocateVariants(user,match[1],b.allocations,b.reason));}
+    if((match=path.match(/^\/api\/admin\/products\/([^/]+)\/variants\/([^/]+)\/stock$/)) && method==='POST') {allowed(user,'stock');const b=await body(req);return respond(shop.variantStock(user,match[1],match[2],b.delta,b.reason));}
     if((match=path.match(/^\/api\/admin\/products\/([^/]+)\/stock$/)) && method==='POST') {allowed(user,'stock');const b=await body(req);return respond(shop.stock(user,match[1],b.delta,b.reason));}
     if(path==='/api/admin/movements' && method==='GET') {allowed(user,'stock');return respond(shop.movements());}
     if(path==='/api/admin/orders' && method==='GET') {allowed(user,'orders');return respond(shop.listOrders(user,true));}

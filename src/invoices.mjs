@@ -43,7 +43,7 @@ export function invoiceService(db,config,provider,shop) {
       const stored=JSON.parse(i.fiscal||'{}');
       const f=fiscalFields({...stored,...(overrides.items?.[index]||{})});
       for(const key of ['codigo_ncm','cfop','unidade_comercial','icms_origem','icms_situacao_tributaria','pis_situacao_tributaria','cofins_situacao_tributaria'])requireThat(f[key]!==undefined && f[key]!=='',400,`Configura ${key} para ${i.name}.`);
-      return{...f,numero_item:index+1,codigo_produto:i.sku,descricao:i.name,quantidade_comercial:i.quantity,quantidade_tributavel:i.quantity,unidade_tributavel:f.unidade_tributavel||f.unidade_comercial,valor_unitario_comercial:i.price/100,valor_unitario_tributavel:i.price/100,valor_bruto:gross[index]/100,valor_desconto:discounts[index]/100,valor_frete:freight[index]/100};
+      return{...f,numero_item:index+1,codigo_produto:i.sku,descricao:[i.name,i.selected_color,i.selected_size].filter(Boolean).join(' · '),quantidade_comercial:i.quantity,quantidade_tributavel:i.quantity,unidade_tributavel:f.unidade_tributavel||f.unidade_comercial,valor_unitario_comercial:i.price/100,valor_unitario_tributavel:i.price/100,valor_bruto:gross[index]/100,valor_desconto:discounts[index]/100,valor_frete:freight[index]/100};
     });
     // Los impuestos proceden de configuraciones revisadas; nunca se deducen el régimen, el CFOP ni los tipos impositivos.
     const payload={...defaults,...emitter,data_emissao:now(),tipo_documento:1,finalidade_emissao:1,presenca_comprador:2,local_destino:emitter.uf_emitente===a.state?1:2,

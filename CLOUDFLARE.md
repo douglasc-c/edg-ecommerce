@@ -49,9 +49,9 @@ Abre la tienda. El primer acceso a la API crea el administrador. Inicia sesión 
 
 ## 4. Preparar los productos y el inventario
 
-1. En **Productos**, registra el SKU, el nombre, la categoría, la descripción, el precio y el coste en euros, y las fotos. El peso y las dimensiones se conservan en el catálogo. En el módulo de envíos europeos se introduce además el peso y las tres medidas del bulto embalado, que pueden ser distintos de los datos de un producto individual.
+1. En **Productos**, registra el SKU base, el nombre, la categoría, la descripción, el precio y el coste en euros. Añade los colores, sus fotos y las combinaciones de talla; cada combinación tiene un SKU y saldo propios. El peso y las dimensiones se conservan en el catálogo. En el módulo de envíos europeos se introduce además el peso y las tres medidas del bulto embalado, que pueden ser distintos de los datos de un producto individual.
 2. Utiliza **Inactivo** para mantener un producto fuera del escaparate mientras lo preparas.
-3. En **Inventario**, registra las existencias iniciales y las reposiciones con un motivo. Los movimientos quedan en el historial.
+3. En **Inventario**, consulta y ajusta las existencias de cada color y talla con un motivo. Los movimientos quedan en el historial. Para productos antiguos, distribuye primero el saldo compartido en el editor: el total debe coincidir y no puede haber reservas pendientes. La actualización conserva el saldo sin repartirlo automáticamente. Consulta [la guía de migración](README.md#migración-de-productos-existentes).
 4. Abre **Ver tienda** para revisar el escaparate. Los precios se muestran en euros y las compras no están disponibles.
 5. En **Usuarios**, crea accesos para el equipo con el perfil adecuado. La recuperación por correo electrónico solo está disponible después de configurar Resend, el remitente y la clave de cifrado.
 

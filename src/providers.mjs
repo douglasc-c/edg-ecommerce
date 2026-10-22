@@ -1,5 +1,6 @@
 import { createHmac, timingSafeEqual } from 'node:crypto';
 import { HttpError, requireThat, safeLink, allocateCents } from './security.mjs';
+const itemDescription=item=>[item.name,item.selected_color,item.selected_size].filter(Boolean).join(' · ');
 export function providers(config, fetcher=fetch) {
   const demo=config.mode==='demo';
   async function request(base,path,body,token,extra={},method='POST') {
@@ -18,7 +19,7 @@ export function providers(config, fetcher=fetch) {
         {id:'demo-express',name:'Envío exprés · simulación',price:3490,days:3,packages:[]}
       ];
       requireThat(config.meToken && config.originPostal && config.supportEmail,503,'Configura Melhor Envio, el correo de asistencia y el código postal brasileño (CEP) de origen.');
-      const data=await me('/shipment/calculate',{from:{postal_code:config.originPostal},to:{postal_code:postalCode},products:items.map(p=>({id:p.id,width:p.width,height:p.height,length:p.length,weight:p.weight,insurance_value:p.price/100,quantity:p.quantity})),options:{receipt:false,own_hand:false}});
+      const data=await me('/shipment/calculate',{from:{postal_code:config.originPostal},to:{postal_code:postalCode},products:items.map(p=>({id:p.variant_id||p.id,width:p.width,height:p.height,length:p.length,weight:p.weight,insurance_value:p.price/100,quantity:p.quantity})),options:{receipt:false,own_hand:false}});
       requireThat(Array.isArray(data),502,'Respuesta de cotización no válida.');
       return data.filter(q=>!q.error && Number.isFinite(Number(q.custom_price??q.price)) && Number(q.custom_price??q.price)>=0).map(q=>({id:String(q.id),name:`${q.company?.name||''} ${q.name}`.trim(),price:Math.round(Number(q.custom_price??q.price)*100),days:q.custom_delivery_time??q.delivery_time,packages:q.packages||[]}));
     },
@@ -26,7 +27,7 @@ export function providers(config, fetcher=fetch) {
       if(demo) return {id:`demo-${order.id}`,url:null};
       requireThat(config.mpToken && config.mpSecret && config.collectorId,503,'Configura las credenciales de pago antes de vender.');
       const parts=allocateCents(order.discount||0,items.map(p=>p.price*p.quantity));
-      const paidItems=(order.discount?items.map((p,i)=>({id:p.product_id,title:`${p.quantity} × ${p.name}`,quantity:1,unit_price:(p.price*p.quantity-parts[i])/100,currency_id:'BRL'})).filter(p=>p.unit_price>0):items.map(p=>({id:p.product_id,title:p.name,quantity:p.quantity,unit_price:p.price/100,currency_id:'BRL'})));
+      const paidItems=(order.discount?items.map((p,i)=>({id:p.variant_id||p.product_id,title:`${p.quantity} × ${itemDescription(p)}`,quantity:1,unit_price:(p.price*p.quantity-parts[i])/100,currency_id:'BRL'})).filter(p=>p.unit_price>0):items.map(p=>({id:p.variant_id||p.product_id,title:itemDescription(p),quantity:p.quantity,unit_price:p.price/100,currency_id:'BRL'})));
       const data=await mp('/checkout/preferences',{
         external_reference:order.id,items:[...paidItems,...(order.shipping?[{id:'shipping',title:'Envío',quantity:1,unit_price:order.shipping/100,currency_id:'BRL'}]:[])],
         payer:{email:customer.email},back_urls:{success:`${config.url}/?payment=success#orders`,pending:`${config.url}/?payment=pending#orders`,failure:`${config.url}/?payment=failure#orders`},
@@ -62,7 +63,7 @@ export function providers(config, fetcher=fetch) {
       const a=JSON.parse(order.address), service=JSON.parse(order.shipping_service);
       requireThat(config.shippingFrom.state_register,503,'Configura la inscripción estatal brasileña del remitente.');
       requireThat(service.packages?.length===1,400,'La cotización no contiene los bultos. Genera la etiqueta desde el panel del transportista.');
-      const data=await me('/cart',{from:config.shippingFrom,to:{name:a.name,phone:a.phone,email:order.customer_email,document:a.document,address:a.street,number:a.number,complement:a.complement,district:a.district,city:a.city,state_abbr:a.state,country_id:'BR',postal_code:a.postal_code},service:Number(service.id),products:items.map(p=>({name:p.name,quantity:p.quantity,unitary_value:p.price/100})),volumes:service.packages.map(p=>({height:p.dimensions?.height??p.height,width:p.dimensions?.width??p.width,length:p.dimensions?.length??p.length,weight:p.weight})),options:{insurance_value:order.subtotal/100,receipt:false,own_hand:false,non_commercial:false,invoice:{key:invoiceKey}}});
+      const data=await me('/cart',{from:config.shippingFrom,to:{name:a.name,phone:a.phone,email:order.customer_email,document:a.document,address:a.street,number:a.number,complement:a.complement,district:a.district,city:a.city,state_abbr:a.state,country_id:'BR',postal_code:a.postal_code},service:Number(service.id),products:items.map(p=>({name:itemDescription(p),quantity:p.quantity,unitary_value:p.price/100})),volumes:service.packages.map(p=>({height:p.dimensions?.height??p.height,width:p.dimensions?.width??p.width,length:p.dimensions?.length??p.length,weight:p.weight})),options:{insurance_value:order.subtotal/100,receipt:false,own_hand:false,non_commercial:false,invoice:{key:invoiceKey}}});
       return String(data.id);
     },
     async buyLabel(id) {return me('/shipment/checkout',{orders:[id]});},

@@ -105,12 +105,47 @@ try{
   assert.deepEqual((await categories.json()).find(category=>category.name==='Prueba'),{name:'Prueba',image:image.url});
   result=await call(`/api/admin/products/${id}/stock`,'POST',{delta:12,reason:'Existencias iniciales'});assert.equal(result.r.status,200,JSON.stringify(result.data));
   assert.equal((await call('/api/products')).data[0].available,12);
+  const variantInput={...input,variants:[
+    {color_name:'Negro',color_hex:'#111111',size:'A5',stock:8,image_ids:[image.id]},
+    {color_name:'Blanco',color_hex:'#ffffff',size:'A4',stock:4,price_override:2499,image_ids:[]}
+  ]};
+  result=await call(`/api/admin/products/${id}`,'PUT',{...variantInput,variants:variantInput.variants.map((variant,index)=>({...variant,stock:index?3:8}))});
+  assert.equal(result.r.status,409,'Una distribución incompleta no modifica las existencias');
+  const beforeMigration=(await call('/api/admin/products')).data.find(product=>product.id===id);
+  assert.equal(beforeMigration.stock,12);assert.equal(beforeMigration.variants_enabled,false);assert.deepEqual(beforeMigration.variants,[]);
+  result=await call(`/api/admin/products/${id}`,'PUT',variantInput);assert.equal(result.r.status,200,JSON.stringify(result.data));
+  assert.equal(result.data.variants_enabled,true);assert.equal(result.data.stock,12);assert.equal(result.data.available,12);assert.equal(result.data.unallocated_stock,0);
+  assert.equal(result.data.variants.length,2);
+  const black=result.data.variants.find(variant=>variant.color_name==='Negro'),white=result.data.variants.find(variant=>variant.color_name==='Blanco');
+  assert.notEqual(black.id,white.id);assert.notEqual(black.sku,white.sku);
+  assert.equal(black.stock,8);assert.equal(white.stock,4);assert.equal(black.price,1999);assert.equal(white.price,2499);
+  assert.deepEqual(black.image_ids,[image.id]);assert.deepEqual(black.images,[image.url]);
+  const stockPath=`/api/admin/products/${id}/variants/${black.id}/stock`;
+  assert.equal((await call(stockPath,'POST',{delta:1,reason:'Sin sesión'},{Cookie:'','X-CSRF-Token':''})).r.status,401);
+  assert.equal((await call(stockPath,'POST',{delta:1,reason:'Sin CSRF'},{'X-CSRF-Token':''})).r.status,403);
+  assert.equal((await call(stockPath,'POST',{delta:1,reason:'Origen externo'},{Origin:'https://other.example'})).r.status,403);
+  assert.equal((await call(`/api/admin/products/${id}/stock`,'POST',{delta:1,reason:'Saldo sin combinación'})).r.status,409);
+  assert.equal((await call(`/api/admin/products/${id}/variants/allocate`,'POST',{allocations:[{variant_id:black.id,quantity:1}],reason:'Saldo inexistente'})).r.status,409);
+  result=await call(stockPath,'POST',{delta:-1,reason:'Corrección Negro A5'});assert.equal(result.r.status,200,JSON.stringify(result.data));
+  assert.equal(result.data.stock,11);assert.equal(result.data.variants.find(variant=>variant.id===black.id).stock,7);
+  assert.equal(result.data.variants.find(variant=>variant.id===white.id).stock,4,'El ajuste no consume otra combinación');
+  const variantMovement=(await call('/api/admin/movements')).data.find(movement=>movement.reason==='Corrección Negro A5');
+  assert.equal(variantMovement.variant_id,black.id);assert.equal(variantMovement.selected_color,'Negro');assert.equal(variantMovement.selected_size,'A5');
   for(const path of ['/api/checkout','/api/shipping/quote',`/api/orders/fake/demo-pay`,`/api/cart/${id}`,'/api/webhooks/mercadopago'])assert.equal((await call(path,path.includes('/cart/')?'PUT':'POST',{})).r.status,503,path);
   assert.equal((await call('/api/admin/orders')).data.length,0);assert.equal((await call('/api/admin/finance')).data.length,0);
   const downloaded=await mf.dispatchFetch(origin+image.url);assert.equal(downloaded.status,200);assert.equal(downloaded.headers.get('content-type'),'image/jpeg');assert.ok((await downloaded.arrayBuffer()).byteLength>0);
   await mf.dispose();mf=create({...options,bindings:Object.fromEntries(Object.entries(options.bindings).filter(([key])=>key!=='ADMIN_PASSWORD'))});
-  assert.equal((await call('/api/products')).data[0].available,12,'Existencias conservadas tras reiniciar');
-  for(const path of ['/api/products','/api/admin/products'])assert.deepEqual((await call(path)).data.find(product=>product.id===id).sizes,['A5','A4'],`Tallas conservadas tras reiniciar: ${path}`);
+  assert.equal((await call('/api/products')).data[0].available,11,'Existencias conservadas tras reiniciar');
+  for(const path of ['/api/products','/api/admin/products']){
+    const product=(await call(path)).data.find(product=>product.id===id);
+    assert.deepEqual(product.sizes,['A5','A4'],`Tallas conservadas tras reiniciar: ${path}`);
+    assert.equal(product.variants_enabled,true);assert.equal(product.stock,11);assert.equal(product.unallocated_stock,0);
+    assert.equal(product.variants.find(variant=>variant.id===black.id).available,7);
+    assert.equal(product.variants.find(variant=>variant.id===white.id).available,4);
+    assert.deepEqual(product.variants.find(variant=>variant.id===black.id).images,[image.url]);
+    assert.equal(product.variants.find(variant=>variant.id===white.id).price,2499);
+  }
+  assert.equal((await call('/api/admin/movements')).data.filter(movement=>movement.reason==='Corrección Negro A5').length,1,'Reiniciar no repite el ajuste');
   const persistedCategories=await mf.dispatchFetch(origin+'/api/categories');assert.equal(persistedCategories.status,200);
   assert.deepEqual((await persistedCategories.json()).find(category=>category.name==='Prueba'),{name:'Prueba',image:image.url},'Imagen de categoría conservada tras reiniciar');
   assert.equal((await call('/api/admin/products')).r.status,200,'Sesión conservada tras reiniciar');
@@ -126,5 +161,5 @@ try{
     result=await call(path);assert.equal(result.r.status,200,JSON.stringify(result.data));assert.equal(result.data.some(product=>product.id===id),false,`Producto eliminado no reaparece tras reiniciar: ${path}`);
   }
   result=await call('/api/categories');assert.equal(result.r.status,200,JSON.stringify(result.data));assert.equal(result.data.some(category=>category.name==='Prueba'),false,'Categoría eliminada no reaparece tras reiniciar');
-  console.log('Workers: idioma por país y navegador, rangos MP4 para Safari, administración, autorización, fotos, categorías, productos, inventario, eliminación, bloqueo de ventas y persistencia verificados.');
+  console.log('Workers: idioma, rangos MP4, administración, autorización, fotos, categorías, migración conservativa, variantes de color y talla, inventario independiente, eliminación, bloqueo de ventas y persistencia verificados.');
 }finally{if(mf)await mf.dispose();await rm(directory,{recursive:true,force:true});}
