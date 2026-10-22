@@ -216,8 +216,8 @@ export function createApp({db=database(),config=configuration(),provider=provide
   }
   const handler=async(req,res)=>{
     res.setHeader('Content-Language','es');
-    res.setHeader('X-Content-Type-Options','nosniff');res.setHeader('X-Frame-Options','DENY');res.setHeader('Referrer-Policy','same-origin');
-    res.setHeader('Content-Security-Policy',"default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; media-src 'self' blob:; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'");
+    res.setHeader('X-Content-Type-Options','nosniff');res.setHeader('X-Frame-Options','DENY');res.setHeader('Referrer-Policy','strict-origin-when-cross-origin');
+    res.setHeader('Content-Security-Policy',"default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data: https://i.ytimg.com; media-src 'self' blob:; connect-src 'self'; frame-src https://www.youtube-nocookie.com; frame-ancestors 'none'; base-uri 'self'; form-action 'self'");
     if(config.production) res.setHeader('Strict-Transport-Security','max-age=31536000');
     try {
       const url=new URL(req.url,config.url);
@@ -226,6 +226,8 @@ export function createApp({db=database(),config=configuration(),provider=provide
       if(/^\/media\/[a-f0-9]{64}\.jpg$/.test(url.pathname)){const id=url.pathname.slice(7,-4),photo=db.prepare('SELECT data FROM media WHERE id=?').get(id);requireThat(photo,404,'Foto no encontrada.');res.writeHead(200,{'Content-Type':'image/jpeg','Cache-Control':'public, max-age=31536000, immutable'});return res.end(req.method==='HEAD'?undefined:Buffer.from(photo.data));}
       const files={'/':'index.html','/edg-hero-emblem.png':'edg-hero-emblem.png','/edg-hero-emblem-black.png':'edg-hero-emblem-black.png','/app.js':'app.js','/styles.css':'styles.css','/favicon.svg':'favicon.svg','/edg-logo.png':'edg-logo.png','/edg-footer-logo.png':'edg-footer-logo.png','/edg-universe-background.webp':'edg-universe-background.webp','/edg-skate-campaign-960.webp':'edg-skate-campaign-960.webp','/edg-skate-campaign-1600.webp':'edg-skate-campaign-1600.webp'};
       files['/loading.css']='loading.css';
+      files['/skate.css']='skate.css';
+      files['/skate.js']='skate.js';
       files['/edg-loading.js']='edg-loading.js';
       for(const id of ['g61','g99','63','121','197','221','240','257','15','19','28','47','55','92','101'])files[`/shape-${id}.webp`]=`shape-${id}.webp`;
       files['/edg-logo-tremor-loop.mp4']='edg-logo-tremor-loop.mp4';

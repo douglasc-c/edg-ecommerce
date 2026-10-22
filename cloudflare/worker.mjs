@@ -59,8 +59,9 @@ export default {
     }
     const headers=new Headers(response.headers);
     headers.set('Content-Language','es');
+    headers.set('Referrer-Policy','strict-origin-when-cross-origin');
     headers.set('X-Content-Type-Options','nosniff');headers.set('X-Frame-Options','DENY');
-    headers.set('Content-Security-Policy',"default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; media-src 'self' blob:; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'");
+    headers.set('Content-Security-Policy',"default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data: https://i.ytimg.com; media-src 'self' blob:; connect-src 'self'; frame-src https://www.youtube-nocookie.com; frame-ancestors 'none'; base-uri 'self'; form-action 'self'");
     headers.set('Strict-Transport-Security','max-age=31536000');
     return new Response(request.method==='HEAD'?null:response.body,{status:response.status,headers});
   },

@@ -138,6 +138,8 @@ for(const scenario of [
     await expect(accessibleLogo).toHaveCount(0);
     if(scenario.mobile)expect(await page.evaluate(()=>matchMedia('(hover:none)').matches)).toBe(true);
     await page.keyboard.press('Tab');
+    await expect(header.getByRole('button',{name:'Abrir menú',exact:true})).toBeFocused();
+    await page.keyboard.press('Tab');
     await expect(home).toBeFocused();
     await logo.evaluate(link=>link.focus());
     await expect(home).toBeFocused();
