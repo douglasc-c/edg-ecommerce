@@ -1,4 +1,4 @@
-import { categorySizes, productSizes, productSizesForSave } from './product-sizes.mjs';
+import { categorySizes, isClothingCategory, productSizes, productSizesForSave } from './product-sizes.mjs';
 import { randomUUID } from 'node:crypto';
 import { transaction } from './db.mjs';
 import { coupons } from './coupons.mjs';
@@ -185,7 +185,7 @@ export function commerce(db,config,provider) {
       requireThat(o.status==='awaiting_payment',409,'El plazo de pago del pedido ha vencido.');
       return applyPayment({id:`demo-${id}`,external_reference:id,currency_id:'BRL',transaction_amount:o.total/100,status:'approved'});
     },
-    categories() {return all(`${categoryRows} ORDER BY names.name COLLATE NOCASE`).map(c=>({...categoryImage(c),sizes:categorySizes(c.name)}));},
+    categories() {return all(`${categoryRows} ORDER BY names.name COLLATE NOCASE`).map(c=>({...categoryImage(c),sizes:categorySizes(c.name),allow_legacy_sizes:!isClothingCategory(c.name)}));},
     saveCategory(user,input) {
       const name=text(input.name,'Categoría',1,80);
       const previous=input.previous===undefined?null:text(input.previous,'Categoría anterior',1,80);

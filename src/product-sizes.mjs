@@ -1,11 +1,13 @@
 import { requireThat } from './security.mjs';
 
+const clothingCategories=/^(camisetas?|sudaderas?|moletom|moletons?)$/;
+const normalizedCategory=category=>category.normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().trim();
+
+export function isClothingCategory(category) {return clothingCategories.test(normalizedCategory(category));}
+
 export function categorySizes(category) {
-  const name=category.normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().trim();
-  // Las categorías y tallas históricas brasileñas siguen siendo válidas.
-  if(/^camisetas?$/.test(name))return ['XS','S','M','L','XL','XXL','PP','P','G','GG','XGG'];
-  if(/^sudaderas?$/.test(name))return ['XS','S','M','L','XL','XXL'];
-  if(/^(moletons?|moleton|moletom)$/.test(name))return ['PP','P','M','G','GG','XGG'];
+  const name=normalizedCategory(category);
+  if(clothingCategories.test(name))return ['S','L','XL','XXL'];
   if(/^gorras?$/.test(name))return ['Única','P/M','G/GG','54','55','56','57','58','59','60','61','62'];
   if(/^bones?$/.test(name))return ['Único','P/M','G/GG','54','55','56','57','58','59','60','61','62'];
   if(/^(tablas?|shapes?|shaipes?)$/.test(name))return ['7.5','7.75','7.875','8.0','8.125','8.25','8.375','8.5','8.75','9.0'];
@@ -41,8 +43,10 @@ export function productSizesForSave(input,category,current=null) {
   }
   const allowed=categorySizes(category);
   if(allowed.length) {
-    // Renombrar una categoría no invalida las tallas que ya tenía ese producto.
-    requireThat(sizes.length>0 && sizes.every(size=>allowed.includes(size) || (sameCategory && previous.includes(size))),400,'Selecciona una talla válida para la categoría.');
+    // Las listas de ropa se actualizan solo con las tallas disponibles. Los clientes
+    // antiguos y las demás categorías conservan sus valores históricos al editar.
+    const allowLegacy=!isClothingCategory(category) || input.sizes===undefined;
+    requireThat(sizes.length>0 && sizes.every(size=>allowed.includes(size) || (allowLegacy && sameCategory && previous.includes(size))),400,'Selecciona una talla válida para la categoría.');
   }
   return sizes;
 }
