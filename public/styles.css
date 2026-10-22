@@ -89,3 +89,36 @@ button.product-visual{width:100%;border:0;color:var(--ink)}pre{white-space:pre-w
 .product-size-option input:checked+span{font-weight:750}
 .product-size-option:focus-within{outline:2px solid var(--ink);outline-offset:2px}
 #product-size .form-help{margin-top:10px;font-weight:400}
+
+/* Native language picker: visible flags, accessible language names. */
+.language-select{appearance:none;-webkit-appearance:none;flex:0 0 48px;width:48px;height:44px;margin:0;padding:4px 6px;border:1px solid currentColor;border-radius:0;background:transparent;color:inherit;font-family:"Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji",sans-serif;font-size:22px;line-height:1.2;text-align:center;text-align-last:center;cursor:pointer;opacity:.9}
+.language-select:hover{opacity:1}
+.language-select:focus-visible{outline:2px solid currentColor;outline-offset:4px;opacity:1}
+.language-select option{background:#fff;color:#111}
+.store-header .language-select{margin-left:auto}
+.admin-top>.stack{align-items:center;flex-wrap:nowrap;min-width:0}
+.admin-top [data-action="account"]{min-width:0;max-width:240px;overflow:hidden}
+.admin-top .user-pill>span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+@media(min-width:1001px) and (max-width:1200px){
+  .store-header .toplinks{gap:16px}
+  .store-header .topactions{padding-left:16px;gap:10px}
+  .store-header .topactions button{max-width:140px}
+}
+@media(max-width:430px){
+  .language-select{flex-basis:44px;width:44px}
+  .store-header .topactions{gap:6px}
+  .store-header .topactions .btn{letter-spacing:.3px;padding-inline:4px}
+  .store-header.is-scrolled .store-header-brand{margin-right:8px}
+  .admin-top{height:auto;min-height:76px;gap:10px;padding-block:12px;flex-wrap:wrap}
+  .admin-top>.stack{width:100%;gap:8px}
+  .admin-top .language-select{margin-left:auto}
+  .admin-top [data-action="account"]{flex:1}
+}
+
+@media(max-width:360px){
+  .store-header.is-scrolled .store-header-brand{width:48px}
+  .store-header-brand .brand{width:48px}
+  .store-header .brand-logo{width:48px;height:31px}
+  .store-header .brand-logo img{width:79px;left:-15px;top:-12px}
+  .store-header .topactions [data-action="login"]{white-space:normal;line-height:1.35;min-height:44px}
+}

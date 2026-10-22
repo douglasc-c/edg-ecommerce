@@ -4,6 +4,7 @@ import { createApp, configuration } from '../src/server.mjs';
 import { email, passwordHash, now } from '../src/security.mjs';
 import { durableDatabase } from './database.mjs';
 import { campaignVideoPaths, campaignVideoResponse } from '../src/video-response.mjs';
+import { normalizeCountry } from '../src/language.mjs';
 
 // Un objeto estable es propietario de la base de datos de esta tienda. Nunca se deriva su nombre de la entrada del usuario.
 export class CommerceStore extends DurableObject {
@@ -31,7 +32,7 @@ export class CommerceStore extends DurableObject {
       return await new Promise((resolve,reject)=>{
         const headers=new Headers();let status=200;
         const response={headersSent:false,setHeader(k,v){headers.set(k,v);},writeHead(code,values){status=code;for(const [k,v] of Object.entries(values))headers.set(k,v);this.headersSent=true;},end(content){resolve(new Response(request.method==='HEAD'?null:content??null,{status,headers}));}};
-        const req={url:request.url,method:request.method,headers:Object.fromEntries(request.headers),socket:{remoteAddress:request.headers.get('cf-connecting-ip')||'unknown'},async *[Symbol.asyncIterator](){if(request.body){for await(const chunk of request.body)yield Buffer.from(chunk);}}};
+        const req={url:request.url,method:request.method,headers:Object.fromEntries(request.headers),country:normalizeCountry(request.headers.get('x-edg-country')),socket:{remoteAddress:request.headers.get('cf-connecting-ip')||'unknown'},async *[Symbol.asyncIterator](){if(request.body){for await(const chunk of request.body)yield Buffer.from(chunk);}}};
         this.app.handler(req,response).catch(reject);
       });
     }catch(error){console.error('Tienda no disponible:',error.message);return Response.json({error:'Tienda no disponible. Revisa APP_URL, ADMIN_EMAIL y ADMIN_PASSWORD en la configuración del Worker.'},{status:503,headers:{'Content-Language':'es'}});}
@@ -41,7 +42,13 @@ export class CommerceStore extends DurableObject {
 export default {
   async fetch(request,env){
     const path=new URL(request.url).pathname;
-    if(path.startsWith('/api/') || path.startsWith('/media/'))return env.STORE.getByName('primary').fetch(request);
+    if(path.startsWith('/api/') || path.startsWith('/media/')){
+      // Solo el dato del edge es fiable: no aceptar cabeceras de país del visitante.
+      const headers=new Headers(request.headers),country=normalizeCountry(request.cf?.country);
+      headers.delete('x-edg-country');
+      if(country)headers.set('x-edg-country',country);
+      return env.STORE.getByName('primary').fetch(new Request(request,{headers}));
+    }
     const campaignVideo=campaignVideoPaths.has(path)&&['GET','HEAD'].includes(request.method);
     let assetRequest=request;
     if(campaignVideo){

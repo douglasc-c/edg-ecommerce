@@ -27,6 +27,11 @@ try{
   const musicAsset=await mf.dispatchFetch(origin+'/music.js');
   assert.equal(musicAsset.status,200);
   assert.match(await musicAsset.text(),/function musicPage/);
+  for(const file of ['i18n.js','i18n-common.js','i18n-editorial.js']){
+    const response=await mf.dispatchFetch(`${origin}/${file}`);
+    assert.equal(response.status,200,file);
+    assert.equal(await response.text(),await readFile(resolve('public',file),'utf8'));
+  }
   for(const name of ['banda-hero','banda-hero-640','banda-live','rap-subterraneo','sobrenatural','mensageiro-do-corre','a-parada-e-o-movimento','achados-no-mundo-perdido','pratas-da-casa','aperta-o-play']){
     const response=await mf.dispatchFetch(origin+`/music/${name}.webp`);
     assert.equal(response.status,200);
@@ -60,10 +65,27 @@ try{
   }
   let auth={};
   async function call(path,method='GET',body,headers={}){
-    const r=await mf.dispatchFetch(origin+path,{method,headers:{Origin:origin,'Content-Type':'application/json',...auth,...headers},body:body===undefined?undefined:JSON.stringify(body)});
+    // Miniflare's fallback country is US; null represents an edge request without a known country.
+    const r=await mf.dispatchFetch(origin+path,{cf:{country:null},method,headers:{Origin:origin,'Content-Type':'application/json',...auth,...headers},body:body===undefined?undefined:JSON.stringify(body)});
     const data=await r.json();return {r,data};
   }
   let result=await call('/api/config');assert.equal(result.r.status,200,JSON.stringify(result.data));assert.equal(result.data.mode,'catalog');assert.equal(result.data.currency,'EUR');assert.equal(result.data.language,'es');assert.equal(result.data.locale,'es-ES');assert.equal(result.r.headers.get('content-language'),'es');assert.equal(result.data.checkout_enabled,false);
+  assert.equal(result.data.suggested_language,'es');assert.equal(result.data.language_source,'default');assert.equal(result.data.country,null);
+  for(const [cf,headers,language,source,country] of [
+    [{country:'BR'},{'X-EDG-Country':'ES','CF-IPCountry':'ES','Accept-Language':'es-ES'},'pt-BR','country','BR'],
+    [{country:'ES'},{'X-EDG-Country':'BR','Accept-Language':'pt-BR'},'es','country','ES'],
+    [{country:'GB'},{'Accept-Language':'es-ES'},'en','country','GB'],
+    [{country:'PT'},{'Accept-Language':'en-GB'},'pt-BR','country','PT'],
+    [{country:'XX'},{'X-EDG-Country':'BR','CF-IPCountry':'BR','Accept-Language':'en;q=0.4,pt-BR;q=0.9'},'pt-BR','accept-language',null],
+    [{country:'T1'},{'X-EDG-Country':'ES','Accept-Language':'en-GB'},'en','accept-language',null],
+    [{country:null},{'X-EDG-Country':'BR','CF-IPCountry':'BR','Accept-Language':'en-GB'},'en','accept-language',null],
+    [{country:null},{'X-EDG-Country':'BR','CF-IPCountry':'BR'},'es','default',null]
+  ]){
+    const response=await mf.dispatchFetch(origin+'/api/config',{cf,headers}),data=await response.json();
+    assert.equal(response.status,200,JSON.stringify(data));assert.equal(response.headers.get('cache-control'),'no-store');
+    assert.deepEqual({language:data.suggested_language,source:data.language_source,country:data.country},{language,source,country});
+    assert.equal(data.currency,'EUR');assert.equal(data.checkout_enabled,false);assert.equal(data.shipping_provider,'sendcloud');
+  }
   assert.equal((await call('/api/admin/products')).r.status,401);
   const login=await call('/api/auth/login','POST',{email:'admin@example.test',password});assert.equal(login.r.status,200,JSON.stringify(login.data));assert.match(login.r.headers.get('set-cookie'),/Secure/);
   auth={Cookie:login.r.headers.get('set-cookie').split(';')[0],'X-CSRF-Token':login.data.csrf};
@@ -104,5 +126,5 @@ try{
     result=await call(path);assert.equal(result.r.status,200,JSON.stringify(result.data));assert.equal(result.data.some(product=>product.id===id),false,`Producto eliminado no reaparece tras reiniciar: ${path}`);
   }
   result=await call('/api/categories');assert.equal(result.r.status,200,JSON.stringify(result.data));assert.equal(result.data.some(category=>category.name==='Prueba'),false,'Categoría eliminada no reaparece tras reiniciar');
-  console.log('Workers: rangos MP4 para Safari, administración, autorización, fotos, categorías, productos, inventario, eliminación, bloqueo de ventas y persistencia verificados.');
+  console.log('Workers: idioma por país y navegador, rangos MP4 para Safari, administración, autorización, fotos, categorías, productos, inventario, eliminación, bloqueo de ventas y persistencia verificados.');
 }finally{if(mf)await mf.dispose();await rm(directory,{recursive:true,force:true});}

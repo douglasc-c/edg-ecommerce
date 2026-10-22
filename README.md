@@ -2,9 +2,17 @@
 
 # EDG Commerce
 
-Tienda online y panel de operaciones integrados: catálogo, carrito persistente, proceso de compra, pedidos, inventario, finanzas, expedición y usuarios con permisos por función. Interfaz en español de España, adaptable a móviles, con área de cliente y área de gestión.
+Tienda online y panel de operaciones integrados: catálogo, carrito persistente, proceso de compra, pedidos, inventario, finanzas, expedición y usuarios con permisos por función. Interfaz en español, inglés y portugués de Brasil, adaptable a móviles, con área de cliente y área de gestión.
 
 La traducción de la interfaz no cambia las integraciones fiscales: el módulo actual emite **NF-e brasileñas mediante Focus NFe**. La facturación española y el pago europeo siguen pendientes de integración. El módulo administrativo **Envíos europeos**, con Sendcloud, permite preparar envíos manuales desde Barcelona a España, Alemania, Italia y Portugal; consulta [SENDCLOUD.md](SENDCLOUD.md) para configurarlo primero en modo de prueba local.
+
+## Idiomas
+
+El selector de banderas de la derecha del menú permite elegir 🇪🇸 español (`es`), 🇬🇧 inglés (`en`) o 🇧🇷 portugués de Brasil (`pt-BR`). Está disponible en la tienda y en la cabecera de gestión. La elección manual se guarda en `localStorage` con la clave `edg.language` y tiene prioridad en las siguientes visitas; una selección automática no se guarda como preferencia manual.
+
+Sin preferencia guardada, Cloudflare sugiere el idioma a partir del país de la conexión (`request.cf.country`): los países hispanohablantes usan español, los lusófonos usan portugués de Brasil y los demás usan inglés. Si el país no está disponible, se utiliza `Accept-Language`, después la preferencia compatible del navegador y, como último recurso, español. En local se utiliza la preferencia del navegador. No se solicita permiso de GPS. El mapeo está en `src/language.mjs` y `/api/config` devuelve `suggested_language`, `language_source` y `country` sin caché compartida.
+
+Los diccionarios `public/i18n-common.js` y `public/i18n-editorial.js` cubren la interfaz y las páginas Skate y Música. El cambio de idioma actualiza los textos, los nombres accesibles, las fechas y el formato de los importes sin reconstruir la página, por lo que conserva los reproductores, el desplazamiento y los campos de los formularios. Los nombres y descripciones de productos, los datos personales, los códigos y los valores enviados al servidor conservan el contenido original. El idioma no cambia la moneda ni la configuración comercial de la tienda.
 
 ## Ejecutar en local
 
