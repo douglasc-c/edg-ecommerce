@@ -80,8 +80,10 @@ export function sendcloudProvider(config,fetcher=fetch) {
     const headers={Authorization:credentials(),Accept:accept};
     if(body)headers['Content-Type']='application/json';
     let response;
-    try{response=await fetcher(BASE+path,{method,headers,redirect:'error',signal:AbortSignal.timeout(15000),...(body?{body:JSON.stringify(body)}:{})});}
+    try{response=await fetcher(BASE+path,{method,headers,redirect:'manual',signal:AbortSignal.timeout(15000),...(body?{body:JSON.stringify(body)}:{})});}
     catch{throw providerError('No se ha podido confirmar la respuesta de Sendcloud.',{uncertain:method!=='GET'});}
+    // Workers no admite redirect:'error'. El modo manual permite bloquear todos los 3xx sin reenviar credenciales.
+    if(response.status>=300 && response.status<400)throw providerError('Sendcloud ha devuelto una redirección inesperada. No se ha seguido para proteger las credenciales.',{uncertain:method!=='GET',code:'SENDCLOUD_REDIRECT'});
     if(!response.ok && !(allowConflict && response.status===409)) {
       const status=response.status===404?404:[400,422].includes(response.status)?422:[401,403,429].includes(response.status)?503:502;
       throw providerError(response.status===404?'Remesa o documento no encontrado en Sendcloud.':status===503?'Sendcloud no está disponible o requiere revisar las credenciales.':'Sendcloud ha rechazado la solicitud. Revisa los datos en su panel.',{status,uncertain:method!=='GET'&&response.status>=500,rejected:response.status>=400&&response.status<500});
