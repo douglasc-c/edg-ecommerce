@@ -75,8 +75,9 @@ try{
   assert.equal((await call('/api/admin/products','POST',{} ,{Origin:'https://other.example'})).r.status,403);
   const photo=jpeg.encode({width:2,height:2,data:Buffer.alloc(16,255)},85).data;
   const upload=await mf.dispatchFetch(origin+'/api/admin/media',{method:'POST',headers:{Origin:origin,...auth,'Content-Type':'image/jpeg'},body:photo});const image=await upload.json();assert.equal(upload.status,201,JSON.stringify(image));
-  const input={sku:'SMOKE-1',name:'Producto Europa',category:'Prueba',description:'Producto real',price:1999,cost:1000,low_stock:2,weight:.5,width:10,height:10,length:10,color:'#d9e4d5',icon:'◇',images:[image.id]};
+  const input={sku:'SMOKE-1',name:'Producto Europa',category:'Prueba',sizes:['A5','A4'],description:'Producto real',price:1999,cost:1000,low_stock:2,weight:.5,width:10,height:10,length:10,color:'#d9e4d5',icon:'◇',images:[image.id]};
   result=await call('/api/admin/products','POST',input);assert.equal(result.r.status,201,JSON.stringify(result.data));const id=result.data.id;
+  assert.deepEqual(result.data.sizes,['A5','A4']);assert.equal(result.data.size,'A5');
   result=await call('/api/admin/categories','POST',{name:'Prueba',previous:'Prueba',image_id:image.id});assert.equal(result.r.status,201,JSON.stringify(result.data));
   const categories=await mf.dispatchFetch(origin+'/api/categories');assert.equal(categories.status,200);
   assert.deepEqual((await categories.json()).find(category=>category.name==='Prueba'),{name:'Prueba',image:image.url});
@@ -87,6 +88,7 @@ try{
   const downloaded=await mf.dispatchFetch(origin+image.url);assert.equal(downloaded.status,200);assert.equal(downloaded.headers.get('content-type'),'image/jpeg');assert.ok((await downloaded.arrayBuffer()).byteLength>0);
   await mf.dispose();mf=create({...options,bindings:Object.fromEntries(Object.entries(options.bindings).filter(([key])=>key!=='ADMIN_PASSWORD'))});
   assert.equal((await call('/api/products')).data[0].available,12,'Existencias conservadas tras reiniciar');
+  for(const path of ['/api/products','/api/admin/products'])assert.deepEqual((await call(path)).data.find(product=>product.id===id).sizes,['A5','A4'],`Tallas conservadas tras reiniciar: ${path}`);
   const persistedCategories=await mf.dispatchFetch(origin+'/api/categories');assert.equal(persistedCategories.status,200);
   assert.deepEqual((await persistedCategories.json()).find(category=>category.name==='Prueba'),{name:'Prueba',image:image.url},'Imagen de categoría conservada tras reiniciar');
   assert.equal((await call('/api/admin/products')).r.status,200,'Sesión conservada tras reiniciar');

@@ -1,4 +1,4 @@
-import { categorySizes } from './product-sizes.mjs';
+import { categorySizes, productSizes, productSizesForSave } from './product-sizes.mjs';
 import { randomUUID } from 'node:crypto';
 import { transaction } from './db.mjs';
 import { coupons } from './coupons.mjs';
@@ -23,7 +23,8 @@ export function commerce(db,config,provider) {
   function rawCart(userId) {return all('SELECT p.*,c.quantity FROM carts c JOIN products p ON p.id=c.product_id WHERE user_id=? AND p.deleted_at IS NULL ORDER BY p.id',userId);}
   function fingerprint(items) {return hash(JSON.stringify(items.map(p=>[p.id,p.price,p.quantity,p.active,p.weight,p.width,p.height,p.length])));}
   function validCart(items) {requireThat(items.length>0 && items.length<=100,400,'El carrito está vacío o supera el límite.'); for(const p of items) requireThat(!p.deleted_at && p.active && p.stock-p.reserved>=p.quantity,409,`Existencias insuficientes para ${p.name}.`);}
-  function publicProduct(p) {return {id:p.id,sku:p.sku,name:p.name,description:p.description,category:p.category,size:p.size,price:p.price,available:p.stock-p.reserved,color:p.color,icon:p.icon,images:JSON.parse(p.images).map(id=>`/media/${id}.jpg`)};}
+  function publicProduct(p) {const sizes=productSizes(p);return {id:p.id,sku:p.sku,name:p.name,description:p.description,category:p.category,size:sizes[0]||'',sizes,price:p.price,available:p.stock-p.reserved,color:p.color,icon:p.icon,images:JSON.parse(p.images).map(id=>`/media/${id}.jpg`)};}
+  function adminProduct(p) {const sizes=productSizes(p);return {...p,size:sizes[0]||'',sizes};}
   const categoryRows='SELECT names.name,c.image_id FROM (SELECT name FROM categories UNION SELECT category AS name FROM products WHERE deleted_at IS NULL) names LEFT JOIN categories c ON c.name=names.name';
   const categoryImage=c=>({...c,image:c.image_id?`/media/${c.image_id}.jpg`:null});
   function order(id,user=null,manage=false) {
@@ -123,7 +124,7 @@ export function commerce(db,config,provider) {
   }
   return {
     audit, expire, applyPayment, applyTracking, order, coupons:discounts,
-    products(admin=false) {return admin?all('SELECT *,stock-reserved available FROM products WHERE deleted_at IS NULL ORDER BY created_at DESC'):all('SELECT * FROM products WHERE active=1 AND deleted_at IS NULL ORDER BY created_at DESC').map(publicProduct);},
+    products(admin=false) {return admin?all('SELECT *,stock-reserved available FROM products WHERE deleted_at IS NULL ORDER BY created_at DESC').map(adminProduct):all('SELECT * FROM products WHERE active=1 AND deleted_at IS NULL ORDER BY created_at DESC').map(publicProduct);},
     cart,
     setCart(user,id,quantity) {
       integer(quantity,'Cantidad',0,99); expire();
@@ -218,21 +219,19 @@ export function commerce(db,config,provider) {
     },
     saveProduct(user,input,id=null) {
       const p={sku:text(input.sku,'SKU',1,50),name:text(input.name,'Nombre',2,120),description:text(input.description,'Descripción',1,2000),category:text(input.category,'Categoría',1,80),price:integer(input.price,'Precio en céntimos',1),cost:integer(input.cost,'Coste en céntimos'),low_stock:integer(input.low_stock,'Existencias mínimas',0,10000),weight:positive(input.weight,'Peso'),width:positive(input.width,'Anchura'),height:positive(input.height,'Altura'),length:positive(input.length,'Longitud'),color:text(input.color,'Color',7,7),icon:text(input.icon,'Símbolo',1,8),active:input.active===false?0:1};
-      if(input.size!==undefined){
-        p.size=typeof input.size==='string'?input.size.trim():null;
-        requireThat(p.size!==null && p.size.length<=30,400,'Talla no válida.');
-        const sizes=categorySizes(p.category);
-        requireThat(!sizes.length || sizes.includes(p.size),400,'Selecciona una talla válida para la categoría.');
-      }
       if(input.images!==undefined)p.images=photoIds(db,input.images);
       if(input.fiscal!==undefined)p.fiscal=JSON.stringify(fiscalFields(input.fiscal));
       requireThat(/^#[a-fA-F0-9]{6}$/.test(p.color),400,'Color no válido.');
       requireThat(!one('SELECT id FROM products WHERE sku=? AND id!=?',p.sku,id||''),409,'SKU ya registrado.');
       return transaction(db,()=>{
+        const current=id?one('SELECT * FROM products WHERE id=? AND deleted_at IS NULL',id):null;
+        requireThat(!id || current,404,'Producto no encontrado.');
+        const sizes=productSizesForSave(input,p.category,current);
+        p.sizes=JSON.stringify(sizes);p.size=sizes[0]||'';
         run('INSERT OR IGNORE INTO categories(name) VALUES(?)',p.category);
-        if(id) {requireThat(one('SELECT id FROM products WHERE id=? AND deleted_at IS NULL',id),404,'Producto no encontrado.'); run(`UPDATE products SET ${Object.keys(p).map(k=>`${k}=?`).join(',')} WHERE id=?`,...Object.values(p),id);}
+        if(id) {run(`UPDATE products SET ${Object.keys(p).map(k=>`${k}=?`).join(',')} WHERE id=?`,...Object.values(p),id);}
         else {id=randomUUID(); run(`INSERT INTO products(id,${Object.keys(p).join(',')},created_at) VALUES(${Array(Object.keys(p).length+2).fill('?').join(',')})`,id,...Object.values(p),now());}
-        audit(user.id,'product.save',id); return one('SELECT * FROM products WHERE id=?',id);
+        audit(user.id,'product.save',id); return adminProduct(one('SELECT * FROM products WHERE id=?',id));
       });
     },
     deleteProduct(user,id) {
@@ -249,7 +248,7 @@ export function commerce(db,config,provider) {
     stock(user,id,delta,reason) {
       integer(delta,'Variación',-100000,100000); requireThat(delta!==0,400,'Introduce una variación distinta de cero.'); text(reason,'Motivo',3,250);
       return transaction(db,()=>{const p=one('SELECT * FROM products WHERE id=? AND deleted_at IS NULL',id); requireThat(p,404,'Producto no encontrado.'); requireThat(p.stock+delta>=p.reserved,409,'El ajuste no puede consumir existencias reservadas.');
-        run('UPDATE products SET stock=stock+? WHERE id=?',delta,id); run('INSERT INTO movements(product_id,quantity,reason,actor_id,created_at) VALUES(?,?,?,?,?)',id,delta,reason,user.id,now()); audit(user.id,'stock.adjust',id,{delta,reason}); return one('SELECT * FROM products WHERE id=?',id);});
+        run('UPDATE products SET stock=stock+? WHERE id=?',delta,id); run('INSERT INTO movements(product_id,quantity,reason,actor_id,created_at) VALUES(?,?,?,?,?)',id,delta,reason,user.id,now()); audit(user.id,'stock.adjust',id,{delta,reason}); return adminProduct(one('SELECT * FROM products WHERE id=?',id));});
     },
     movements() {return all('SELECT m.*,p.name product_name,u.name actor_name FROM movements m JOIN products p ON p.id=m.product_id LEFT JOIN users u ON u.id=m.actor_id ORDER BY m.id DESC LIMIT 200');},
     status(user,id,status,input={}) {

@@ -47,11 +47,11 @@ test('las tallas españolas y las categorías heredadas se validan y conservan a
   const {shop,admin,p}=fixture(t);
   for(const category of ['Gorra','Camiseta','Sudadera','Tabla'])assert.ok(shop.categories().some(c=>c.name===category));
   for(const [category,size] of [['Gorra','Única'],['Camiseta','M'],['Sudadera','XL'],['Tabla','8.25'],['Boné','Único'],['Moletom','GG'],['Shape','8.25']]){
-    const saved=shop.saveProduct(admin,{...p,images:[],fiscal:{},category,size},p.id);
+    const saved=shop.saveProduct(admin,{...p,images:[],fiscal:{},category,size,sizes:undefined},p.id);
     assert.equal(saved.size,size);
     assert.equal(shop.products().find(row=>row.id===p.id).size,size);
-    assert.throws(()=>shop.saveProduct(admin,{...saved,images:[],fiscal:{},size:'no válida'},p.id),/talla válida/);
-    assert.throws(()=>shop.saveProduct(admin,{...saved,images:[],fiscal:{},size:''},p.id),/talla válida/);
+    assert.throws(()=>shop.saveProduct(admin,{...saved,images:[],fiscal:{},size:'no válida',sizes:undefined},p.id),/talla válida/);
+    assert.throws(()=>shop.saveProduct(admin,{...saved,images:[],fiscal:{},size:'',sizes:undefined},p.id),/talla válida/);
   }
   assert.ok(shop.categories().find(c=>c.name==='Gorra').sizes.includes('Única'));
   assert.ok(shop.categories().find(c=>c.name==='Sudadera').sizes.includes('XL'));

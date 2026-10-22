@@ -142,7 +142,7 @@ Utiliza **una sola instancia del servidor** con disco persistente y copias de se
 
 Esta versión cubre la compra, las operaciones, las fotos, los cupones, la recuperación de contraseña y la integración de emisión de NF-e brasileñas. Antes de abrir la tienda, necesita las credenciales de los proveedores, un catálogo real, la identidad de la tienda y el alojamiento. Las API externas se han verificado mediante su documentación y con pruebas de respuestas controladas; **todavía es necesaria la homologación autenticada**.
 
-Todavía no incluye variantes de talla o color, cálculo tributario automático, conciliación automática de comisiones, devoluciones con logística inversa, verificación de correo electrónico, avisos de venta por correo electrónico o WhatsApp, múltiples almacenes ni integración de compras con proveedores. La emisión fiscal utiliza los datos tributarios configurados y revisados; no determina automáticamente el régimen, CFOP, CSOSN, DIFAL, IBS/CBS ni los tipos impositivos.
+Todavía no incluye variantes de talla o color con SKU, precio o existencias independientes, cálculo tributario automático, conciliación automática de comisiones, devoluciones con logística inversa, verificación de correo electrónico, avisos de venta por correo electrónico o WhatsApp, múltiples almacenes ni integración de compras con proveedores. La emisión fiscal utiliza los datos tributarios configurados y revisados; no determina automáticamente el régimen, CFOP, CSOSN, DIFAL, IBS/CBS ni los tipos impositivos.
 
 En la integración de etiquetas, la creación automática se limita a presupuestos de **un solo bulto**; los servicios que exigen una oficina, XML fiscal o varios bultos requieren ampliar el adaptador u operar desde el panel de Melhor Envio. No repitas una creación o compra ante una respuesta incierta sin comprobar el panel del proveedor. Para recuperar automáticamente estos casos y los webhooks perdidos, la siguiente evolución debe incluir una cola duradera y conciliación periódica.
 
@@ -155,6 +155,12 @@ Los listados administrativos tienen límites de 200 pedidos, usuarios o movimien
 - [Melhor Envio: presupuestos](https://docs.melhorenvio.com.br/reference/calculo-de-fretes-por-produtos)
 - [Melhor Envio: creación de etiquetas](https://docs.melhorenvio.com.br/reference/inserir-fretes-no-carrinho)
 - [Melhor Envio: webhooks](https://docs.melhorenvio.com.br/docs/webhooks)
+
+## Tallas de los productos
+
+En **Productos → Nuevo producto**, elige una categoría y marca una o varias tallas; las tablas muestran sus anchuras en pulgadas. Las categorías sin opciones predefinidas permiten introducir tallas separadas por comas. Puedes guardar hasta 20 tallas por producto y añadir o quitar opciones al editarlo. Al cambiar de categoría se conservan únicamente las opciones compatibles con la nueva categoría.
+
+La lista aparece en los detalles del catálogo y en Productos e Inventario. Todas las tallas comparten el SKU, el precio y las existencias totales del producto; no se registra una talla elegida en el carrito o el pedido. Los productos anteriores conservan su talla al actualizarse. La API devuelve `sizes` como una lista y mantiene `size` como su primer valor para clientes anteriores; las ediciones que omiten ambos campos conservan la selección existente.
 
 ## Fotos de los productos
 
