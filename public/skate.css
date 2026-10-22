@@ -46,7 +46,7 @@
 .skate-chapters h3{text-transform:uppercase;margin-bottom:12px;font-size:18px}
 .skate-chapters p{max-width:380px;color:#555;font-size:12px}
 .skate-history-photo{margin:46px 0 0;overflow:hidden;background:#ddd}
-.skate-history-photo img{display:block;width:100%;height:clamp(250px,36vw,510px);object-fit:cover;object-position:center}
+.skate-history-photo img{display:block;width:100%;height:auto}
 .skate-history-photo figcaption{padding-top:12px;font-size:10px;color:#666}
 .skate-team{background:#111;color:#fff}
 .skate-team .skate-section-head p{color:#b7b7b7}
@@ -106,7 +106,6 @@ dialog.store-menu::backdrop{background:#0008;backdrop-filter:blur(3px)}
   .skate-chapter-number{margin-bottom:15px}
   .skate-chapters p{max-width:560px}
   .skate-history-photo{margin-top:32px}
-  .skate-history-photo img{height:270px}
   .skate-team-grid{grid-template-columns:1fr;gap:22px}
   .skate-rider-copy{padding:22px}
   .skate-rider-copy h3{font-size:22px}

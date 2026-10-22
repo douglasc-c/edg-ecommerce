@@ -228,6 +228,7 @@ export function createApp({db=database(),config=configuration(),provider=provide
       files['/loading.css']='loading.css';
       files['/skate.css']='skate.css';
       files['/skate.js']='skate.js';
+      files['/edg-skate-history-mosaic.webp']='edg-skate-history-mosaic.webp';
       files['/music.js']='music.js';
       files['/music.css']='music.css';
       for(const name of ['banda-hero','banda-hero-640','banda-live','rap-subterraneo','sobrenatural','mensageiro-do-corre','a-parada-e-o-movimento','achados-no-mundo-perdido','pratas-da-casa','aperta-o-play'])files[`/music/${name}.webp`]=`music/${name}.webp`;
