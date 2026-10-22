@@ -46,7 +46,7 @@ test('categorías: alta independiente, actualización de los productos al renomb
 test('las tallas españolas y las categorías heredadas se validan y conservan al editar',t=>{
   const {shop,admin,p}=fixture(t);
   for(const category of ['Gorra','Camiseta','Sudadera','Tabla'])assert.ok(shop.categories().some(c=>c.name===category));
-  for(const [category,size] of [['Gorra','Única'],['Camiseta','M'],['Sudadera','XL'],['Tabla','8.25'],['Boné','Único'],['Moletom','GG'],['Shape','8.25']]){
+  for(const [category,size] of [['Gorra','Única'],['Camiseta','L'],['Sudadera','XL'],['Tabla','8.25'],['Boné','Único'],['Moletom','XL'],['Shape','8.25']]){
     const saved=shop.saveProduct(admin,{...p,images:[],fiscal:{},category,size,sizes:undefined},p.id);
     assert.equal(saved.size,size);
     assert.equal(shop.products().find(row=>row.id===p.id).size,size);
