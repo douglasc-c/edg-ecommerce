@@ -57,6 +57,7 @@ test('los destacados se reproducen bajo demanda y solo mantienen un reproductor'
 });
 
 test('el menú lateral identifica SKATE, cierra con Escape y permite volver a la tienda',async({page})=>{
+  await page.setViewportSize({width:390,height:844});
   await page.goto('/#skate');
   const drawer=page.locator('#store-menu');
   const open=page.getByRole('button',{name:'Abrir menú',exact:true});
@@ -66,6 +67,15 @@ test('el menú lateral identifica SKATE, cierra con Escape y permite volver a la
   await page.keyboard.press('Escape');
   await expect(drawer).not.toBeVisible();
   await expect(open).toBeFocused();
+
+  await open.click();
+  await page.setViewportSize({width:1001,height:844});
+  await expect(drawer).not.toBeVisible();
+  await expect(page.locator('html')).not.toHaveClass(/store-menu-visible/);
+  await expect(open).toBeHidden();
+  await expect(page.getByRole('banner').getByRole('link',{name:'Inicio',exact:true})).toBeFocused();
+  await page.setViewportSize({width:1000,height:844});
+  await expect(open).toBeVisible();
 
   await open.click();
   await drawer.getByRole('link',{name:'Inicio',exact:true}).click();
