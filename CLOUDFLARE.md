@@ -2,7 +2,7 @@
 
 El proyecto incluye un Worker listo para el **modo catálogo**, con gestión real de productos, fotos, precios, existencias, movimientos y usuarios. El escaparate está disponible e indica «Tienda en preparación». El carrito, los presupuestos del proceso de compra, el pago simulado y los webhooks de Mercado Pago y Melhor Envio están bloqueados en la API. El módulo administrativo **Envíos europeos** y su webhook de Sendcloud tienen un flujo independiente, descrito en [SENDCLOUD.md](SENDCLOUD.md). El catálogo no cobra ni reserva nada.
 
-El archivo `wrangler.jsonc` utiliza `COMMERCE_MODE=catalog`, `STORE_CURRENCY=EUR`, `SHIPPING_PROVIDER=sendcloud` y `SENDCLOUD_ENVIRONMENT=test`. En esta etapa no es necesario introducir credenciales del banco español, de Mercado Pago ni de Melhor Envio. La integración europea de pagos y facturación sigue pendiente; cambiar únicamente a `live` no habilita pagos en euros. La traducción al español tampoco cambia el módulo fiscal brasileño de Focus NFe.
+El archivo `wrangler.jsonc` utiliza `APP_URL=https://edgskateboards.com`, `COMMERCE_MODE=catalog`, `STORE_CURRENCY=EUR`, `SHIPPING_PROVIDER=sendcloud` y `SENDCLOUD_ENVIRONMENT=test`. En esta etapa no es necesario introducir credenciales del banco español, de Mercado Pago ni de Melhor Envio. La integración europea de pagos y facturación sigue pendiente; cambiar únicamente a `live` no habilita pagos en euros. La traducción al español tampoco cambia el módulo fiscal brasileño de Focus NFe.
 
 ## 1. Actualizar el proyecto
 
@@ -29,8 +29,9 @@ Anota la URL HTTPS devuelta, por ejemplo `https://edg-ecommerce.tu-subdominio.wo
 
 ## 3. Configurar la URL y el administrador
 
+`APP_URL` está en `vars` de `wrangler.jsonc` con el valor `https://edgskateboards.com`. Si publicas en otra URL, cámbiala por el origen HTTPS exacto del Worker o del dominio propio, sin ruta, antes de desplegar. El correo y la contraseña del administrador se configuran como secretos:
+
 ```bash
-npx wrangler secret put APP_URL
 npx wrangler secret put ADMIN_EMAIL
 npx wrangler secret put ADMIN_PASSWORD
 ```
@@ -39,11 +40,10 @@ Introduce cada valor cuando lo solicite el terminal:
 
 | Configuración | Valor |
 | --- | --- |
-| `APP_URL` | La URL HTTPS exacta del Worker o del dominio propio, sin ruta. |
 | `ADMIN_EMAIL` | Tu correo electrónico para acceder a la administración. |
 | `ADMIN_PASSWORD` | Una contraseña exclusiva de entre 12 y 128 caracteres. |
 
-La URL y el correo electrónico se guardan como secretos para que el siguiente despliegue no los sobrescriba. No pegues contraseñas en archivos ni commits. Antes de configurar los tres valores, el escaparate estático puede cargar, pero la API devuelve un error de disponibilidad.
+Las variables públicas se gestionan desde `wrangler.jsonc`; los valores secretos se guardan por separado en Cloudflare. Si ya están configurados en el panel del mismo Worker, no necesitas volver a introducirlos. No pegues contraseñas en archivos ni commits. Antes de configurar el administrador, el escaparate estático puede cargar, pero la API devuelve un error de disponibilidad.
 
 El proyecto también utiliza `keep_vars: true` en `wrangler.jsonc` para conservar las variables configuradas únicamente en el panel. Sin esta opción, un despliegue con Wrangler puede eliminar variables de texto que no figuren en el archivo. Los secretos se conservan independientemente de esta opción. Si `APP_URL` ya ha desaparecido, vuelve a añadirlo como **Secret** en **Settings → Variables and Secrets → Production** y pulsa **Deploy**; `keep_vars` no recupera valores eliminados. Para este dominio, su valor es `https://www.edgskateboards.com`, sin comillas, espacios ni rutas. Referencia: [Wrangler y la configuración del panel](https://developers.cloudflare.com/workers/wrangler/configuration/#source-of-truth).
 
@@ -55,11 +55,11 @@ La API devuelve JSON con estado 503 y sin caché cuando falla la inicialización
 
 ### Cambiar al dominio propio
 
-Al vincular el dominio, actualiza el secreto **APP_URL** en **Workers & Pages → edg-ecommerce → Settings → Variables and Secrets** y aplica los cambios. Para la tienda europea, el origen público es `https://www.edgskateboards.com` (sin rutas ni espacios).
+Al vincular el dominio, configura `APP_URL` en `vars` de `wrangler.jsonc` y despliega los cambios. Para la tienda europea, el origen público es `https://edgskateboards.com` (sin rutas ni espacios), que ya está configurado en el archivo.
 
-El inicio de sesión comprueba que el origen del navegador coincida exactamente con `APP_URL`. Si conservas la URL anterior de `workers.dev`, el acceso desde el dominio nuevo devuelve **403 «Origen no permitido.»**. `https://edgskateboards.com` y `https://www.edgskateboards.com` son orígenes distintos: utiliza la versión con `www` y configura la redirección del dominio sin `www` hacia ella. Esta comprobación no debe desactivarse.
+El inicio de sesión comprueba que el origen del navegador coincida exactamente con `APP_URL`. Accede desde el origen configurado: con `APP_URL=https://edgskateboards.com`, iniciar sesión desde `workers.dev` devuelve **403 «Origen no permitido.»**. `https://edgskateboards.com` y `https://www.edgskateboards.com` son orígenes distintos: configura la redirección del dominio con `www` hacia el dominio sin `www`. Esta comprobación no debe desactivarse.
 
-Después de aplicar el cambio, recarga e inicia sesión en el dominio nuevo. Actualiza también la URL del webhook de Sendcloud a `https://www.edgskateboards.com/api/webhooks/sendcloud` cuando lo actives; los enlaces de recuperación de contraseña utilizan igualmente `APP_URL`.
+Después de aplicar el cambio, recarga e inicia sesión en el dominio configurado. Actualiza también la URL del webhook de Sendcloud a `https://edgskateboards.com/api/webhooks/sendcloud` cuando lo actives; los enlaces de recuperación de contraseña utilizan igualmente `APP_URL`.
 
 La política de seguridad permite el script de Cloudflare Web Analytics en `https://static.cloudflareinsights.com` y el envío de métricas a `https://cloudflareinsights.com` o al mismo origen. No habilita scripts inline ni dominios arbitrarios. Referencia: [CSP y Cloudflare Web Analytics](https://developers.cloudflare.com/web-analytics/faq/#what-do-i-need-to-add-to-my-content-security-policy-csp).
 
@@ -101,7 +101,7 @@ En **Workers & Pages → Create → Import a repository**, selecciona `douglasc-
 | Comando de despliegue | `npm run deploy` |
 | Versión de Node | `24` |
 
-La configuración de los bindings está en `wrangler.jsonc`. Después del primer despliegue, añade `APP_URL`, `ADMIN_EMAIL` y `ADMIN_PASSWORD` en **Settings → Variables and Secrets**, como secretos, y aplica los cambios.
+La configuración de los bindings y las variables públicas, incluida `APP_URL`, está en `wrangler.jsonc`. Después del primer despliegue, añade `ADMIN_EMAIL` y `ADMIN_PASSWORD` en **Settings → Variables and Secrets**, como secretos, y aplica los cambios. Los secretos de Sendcloud se configuran del mismo modo cuando prepares los envíos.
 
 ## Persistencia, tiendas y actualizaciones
 

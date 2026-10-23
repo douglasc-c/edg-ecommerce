@@ -16,11 +16,15 @@
   "migrations": [{ "tag": "v1", "new_sqlite_classes": ["CommerceStore"] }],
   "triggers": { "crons": ["*/5 * * * *"] },
   "vars": {
+    "APP_URL": "https://edgskateboards.com",
     "COMMERCE_MODE": "catalog",
     "STORE_NAME": "EDG Commerce",
     "STORE_CURRENCY": "EUR",
     "SHIPPING_PROVIDER": "sendcloud",
     "SENDCLOUD_ENVIRONMENT": "test"
   },
+  // Secretos del Worker (panel de Cloudflare o `npx wrangler secret put NOMBRE`):
+  // ADMIN_EMAIL, ADMIN_PASSWORD, SENDCLOUD_PUBLIC_KEY, SENDCLOUD_SECRET_KEY,
+  // SENDCLOUD_SENDER_ADDRESS_ID. Sus valores no se incluyen en este archivo.
   "observability": { "enabled": true }
 }
