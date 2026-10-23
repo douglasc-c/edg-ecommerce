@@ -11,7 +11,7 @@
   <link rel="stylesheet" href="/skate.css">
   <link rel="stylesheet" href="/music.css">
   <link rel="stylesheet" href="/loading.css">
-  <script src="/edg-loading.js" async></script>
+  <link rel="preload" href="/edg-loading.js" as="script">
   <script src="/i18n-common.js" defer></script>
   <script src="/i18n-editorial.js" defer></script>
   <script src="/i18n.js" defer></script>
@@ -28,6 +28,7 @@
       </div>
     </main>
   </div>
+  <script src="/edg-loading.js"></script>
   <div id="toast" role="status" aria-live="polite"></div>
   <dialog id="dialog" aria-labelledby="dialog-title"></dialog>
 </body>

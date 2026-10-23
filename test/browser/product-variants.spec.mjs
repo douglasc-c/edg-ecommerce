@@ -63,9 +63,12 @@ test('crear una estampa con colores, fotos y existencias independientes y compra
   await page.locator('#dialog').getByRole('button',{name:'Cerrar',exact:true}).click();
 
   await page.goto('/#store');
-  await expect(page.locator('.product').filter({has:page.getByRole('heading',{name,exact:true})}).locator('.product-photo')).toHaveAttribute('src',black.images[0]);
+  // Variants created together can share a timestamp; their UUID order does
+  // not promise that Negro is the first color in the returned catalog.
+  await expect(page.locator('.product').filter({has:page.getByRole('heading',{name,exact:true})}).locator('.product-photo')).toHaveAttribute('src',p.variants[0].images[0]);
   await page.getByRole('button',{name:`Añadir ${name}`,exact:true}).click();
   await expect(page.locator('#variant-selection')).toBeVisible();
+  await page.getByRole('button',{name:'Negro',exact:true}).click();
   await expect(page.locator('[data-action="add-selected"]')).toBeDisabled();
   await expect(page.getByRole('button',{name:'L Agotado',exact:true})).toBeDisabled();
   await expect(page.locator('#selected-product-image img')).toHaveAttribute('src',black.images[0]);
