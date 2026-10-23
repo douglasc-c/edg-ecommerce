@@ -25,7 +25,7 @@ test('la migración v1 conserva los datos existentes y la v8 se puede repetir',t
   insertLegacyProduct(db,{id:'existing',name:'Produto existente'});
   migrate(db);migrate(db);
   assert.equal(db.prepare('SELECT name FROM products').get().name,'Produto existente');
-  assert.equal(db.prepare('SELECT MAX(version) v FROM schema_version').get().v,8);
+  assert.equal(db.prepare('SELECT MAX(version) v FROM schema_version').get().v,9);
   assert.equal(db.prepare('SELECT images FROM products').get().images,'[]');
   assert.equal(db.prepare('SELECT size FROM products').get().size,'');
   assert.equal(db.prepare('SELECT sizes FROM products').get().sizes,'[]');
