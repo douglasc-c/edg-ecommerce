@@ -64,6 +64,8 @@ test('cambiar idioma conserva el catálogo, el vídeo y los formularios y traduc
   await expect(page.locator('#product-grid .product')).toHaveCount(1);
   await page.evaluate(()=>{window.__languageVideo=document.querySelector('#campaign-video');window.scrollTo({top:600,behavior:'instant'});});
   await expect(header).toHaveClass(/is-scrolled/);
+  // Wait for the downward scroll to be processed before reversing direction.
+  await expect(header).toHaveClass(/is-scroll-hidden/);
   await page.evaluate(()=>window.scrollTo({top:450,behavior:'instant'}));
   await expect(header).not.toHaveClass(/is-scroll-hidden/);
   const scroll=await page.evaluate(()=>window.scrollY),requestsBeforeSwitch=productRequests;
