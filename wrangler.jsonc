@@ -16,7 +16,7 @@
   "migrations": [{ "tag": "v1", "new_sqlite_classes": ["CommerceStore"] }],
   "triggers": { "crons": ["*/5 * * * *"] },
   "vars": {
-    "APP_URL": "https://edgskateboards.com",
+    "APP_URL": "https://www.edgskateboards.com",
     "COMMERCE_MODE": "catalog",
     "STORE_NAME": "EDG Commerce",
     "STORE_CURRENCY": "EUR",
