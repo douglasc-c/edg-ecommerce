@@ -134,7 +134,7 @@ THIS SOFTWARE.
     updatePlayback();
   }
 
-  // This async script is placed after the SVG. DOMContentLoaded would wait
+  // This script is placed after the SVG. DOMContentLoaded would wait
   // for the deferred storefront scripts while leaving the loading screen still.
   startLoadingAnimation();
 })();

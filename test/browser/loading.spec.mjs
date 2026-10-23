@@ -5,7 +5,7 @@ test.use({viewport:{width:390,height:844},isMobile:true,hasTouch:true});
 async function holdLoadingScreen(page,check){
   let release;
   const released=new Promise(resolve=>{release=resolve;});
-  // Keep the parser open after the actual SVG and its async script. Deferred
+  // Keep the parser open after the actual SVG and its script. Deferred
   // storefront scripts and DOMContentLoaded must not be needed to animate it.
   await page.route('**/loading-parser-block.js',async route=>{
     await released;
