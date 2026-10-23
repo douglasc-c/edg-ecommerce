@@ -4,7 +4,8 @@ test('fotos, cupón, emisión de prueba y recuperación de contraseña desde la 
   const pixel=await sharp({create:{width:64,height:64,channels:3,background:'#336655'}}).png().toBuffer();
   const errors=[];page.on('pageerror',e=>errors.push(e.message));await page.goto('/');
   await page.getByRole('button',{name:'Iniciar sesión',exact:true}).click();await page.getByLabel('Correo electrónico',{exact:true}).fill('admin@example.com');await page.getByLabel('Contraseña',{exact:true}).fill('UI-exclusive-fixture-2026');await page.locator('#auth-form').getByRole('button',{name:'Iniciar sesión',exact:true}).click();await expect(page.getByRole('heading',{name:'Hola, Administrador.'})).toBeVisible();
-  await page.getByRole('link',{name:'Productos',exact:true}).click();await page.getByRole('button',{name:'Editar',exact:true}).first().click();
+  // Leave the notebook used by checkout unchanged, regardless of UUID ordering.
+  await page.getByRole('link',{name:'Productos',exact:true}).click();await page.getByRole('row').filter({hasText:'Mochila urbana'}).getByRole('button',{name:'Editar',exact:true}).click();
   const editor=page.locator('#product-form'),editingId=await editor.getAttribute('data-id');
   const editingProduct=(await (await page.request.get('/api/admin/products')).json()).find(product=>product.id===editingId);
   if(!editingProduct.variants_enabled){

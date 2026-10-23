@@ -259,7 +259,7 @@ export function createApp({db=database(),config=configuration(),provider=provide
       if(res.headersSent) return res.end();
       const status=e instanceof HttpError?e.status:500;
       if(status===500) console.error('Error en la solicitud:',e.name,e.code||'internal');
-      res.writeHead(status,{'Content-Type':'application/json; charset=utf-8','Cache-Control':'no-store'});res.end(JSON.stringify({error:status===500?'Error interno. Inténtalo de nuevo.':e.message}));
+      res.writeHead(status,{'Content-Type':'application/json; charset=utf-8','Cache-Control':'no-store'});res.end(JSON.stringify({error:status===500?'Error interno. Inténtalo de nuevo.':e.message,...(e instanceof HttpError&&e.provider?.name==='sendcloud'?{provider:e.provider}:{})}));
     }
   };
   if(runtime==='worker') return {handler,db,shop,recovery,invoices,europe};

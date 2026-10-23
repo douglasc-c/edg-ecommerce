@@ -150,7 +150,7 @@ test('los patrones traducen mensajes compuestos manteniendo nombres, SKU, tallas
     values:'1, 2, 3',category:'Skate EDG',sizes:'8.0, 8.25',sku:'EDG-SH-008',currency:'EUR',
     stock:10,reserved:2,available:8,id:'label-α/902',carrier:'Correos Express',service:'DHL 24/48',
     total:30,customer:2,environment:'Demo',reference:'EDG/2026/01',recipient:'ana+edg@example.test',
-    field:'tax_code',min:2,max:120
+    field:'tax_code',min:2,max:120,status:400,detail:'Invalid contract.'
   });
   for(const language of ['en','pt-BR']){
     i18n.setLanguage(language);
