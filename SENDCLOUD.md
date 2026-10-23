@@ -64,7 +64,7 @@ También puedes añadir los secretos en el Worker, en **Settings → Variables a
 
 1. Entra con un administrador o un usuario de expedición y abre **Gestión → Envíos europeos**.
 2. Pulsa **Comprobar conexión**. Revisa en Sendcloud la cuenta y el remitente configurados, y confirma que el origen sea Barcelona, `ES`.
-3. El país de destino está fijado a **España (Península y Baleares)**. Introduce la dirección, el código postal español de cinco dígitos y la ciudad con precisión. El campo **Provincia** es opcional; si lo introduces, utiliza el código ISO completo, por ejemplo `ES-B` para Barcelona.
+3. El país de destino está fijado a **España (Península y Baleares)**. Introduce la dirección, el código postal español de cinco dígitos y la ciudad con precisión. El campo **Provincia** es opcional; si lo introduces, utiliza el código ISO completo, por ejemplo `ES-B` para Barcelona. Se conserva en los datos locales, pero no se envía como `state_province_code` a Sendcloud: la API no admite ese campo para España, ni al consultar tarifas ni al crear el envío.
 4. Pesa y mide el bulto exterior ya embalado. Introduce peso, largo, ancho y alto; no se admite omitir medidas ni añadir un segundo bulto.
 5. Pulsa **Consultar tarifas** y selecciona uno de los servicios devueltos. Revisa la moneda EUR y el importe que muestra el proveedor.
 6. Antes de simular o contratar, comprueba las consultas para un destino válido de la Península y otro de Baleares si vas a utilizar esa ruta. Estas consultas son de lectura: no pulses el botón de creación para verificar únicamente las tarifas. Comprueba también que se rechazan Canarias, Ceuta, Melilla y cualquier país distinto de `ES`. Las cotizaciones internacionales anteriores no permiten crear un envío nuevo.

@@ -56,8 +56,7 @@ function apiAddress(input,{forQuote=false}={}) {
   const result={country_code:country,postal_code:postal,city:field(input.city,'Ciudad',100),address_line_1:field(input.address??input.street??input.address_line_1,'Dirección',200)};
   const house=input.house_number??input.number;
   if(house)result[forQuote?'address_line_1':'house_number']=forQuote?`${result.address_line_1} ${field(String(house),'Número',30)}`:field(String(house),'Número',30);
-  const province=input.state_province_code??input.state;
-  if(province)result.state_province_code=field(province,'Provincia',30);
+  // Sendcloud no admite state_province_code para España; se conserva solo en los datos locales.
   if(!forQuote) {
     result.name=field(input.name,'Nombre',150);
     for(const [key,value] of Object.entries({company_name:input.company_name,address_line_2:input.address_2??input.complement??input.address_line_2,email:input.email,phone_number:input.telephone??input.phone??input.phone_number}))if(value)result[key]=field(value,key==='email'?'Correo electrónico':key==='phone_number'?'Teléfono':'Información de dirección',key==='email'?254:200);

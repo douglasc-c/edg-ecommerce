@@ -53,6 +53,29 @@ test('cotiza con objetos de dirección y bulto completo mediante shipping-option
   assert.equal(body.to_country_code,undefined);assert.equal(body.weight,undefined);m.done();
 });
 
+test('omite la provincia española del origen y destino al cotizar Península y Baleares',async()=>{
+  for(const target of [
+    {...destination,state_province_code:'ES-M'},
+    {...destination,postal_code:'07001',city:'Palma',state_province_code:'ES-PM'},
+    {...destination,state:'ES-M'},
+  ]){
+    const origin={...sender,...(target.state?{state:'ES-B'}:{state_province_code:'ES-B'})};
+    const original=structuredClone({sender:origin,destination:target});
+    const m=mock([{path:'/shipping-options',method:'POST',result:json({data:[]})}]);
+    assert.deepEqual(await sendcloudProvider(config,m.fetcher).quote({sender:origin,destination:target,parcel}),[]);
+    const body=JSON.parse(m.calls[0].init.body);
+    for(const address of [body.from_address,body.to_address]){
+      assert.equal(Object.hasOwn(address,'state_province_code'),false);
+      assert.equal(Object.hasOwn(address,'state'),false);
+      assert.equal(address.country_code,'ES');
+    }
+    assert.equal(body.from_address.postal_code,origin.postal_code);
+    assert.equal(body.to_address.postal_code,target.postal_code);
+    assert.equal(body.to_address.city,target.city);
+    assert.deepEqual({sender:origin,destination:target},original);m.done();
+  }
+});
+
 test('conserva el motivo JSON:API de una tarifa rechazada y registra solo código y campo',async()=>{
   const reports=[],errors=[{status:'400',code:'invalid',detail:'Invalid contract.',source:{pointer:'/contract_id'}}];
   const m=mock([{path:'/shipping-options',method:'POST',result:json({errors},400)}]);
@@ -170,6 +193,18 @@ test('anuncia una sola vez con external_reference_id único y sin Idempotency-Ke
   const result=await sendcloudProvider(config,m.fetcher).create({reference:'edg-shipping-123',sender,destination,parcel,option});
   assert.equal(result.shipment_id,'shipment-uuid');assert.equal(result.parcel_id,'500');assert.equal(result.status,'label_created');
   const body=JSON.parse(m.calls[1].init.body);assert.equal(body.external_reference_id,'edg-shipping-123');assert.deepEqual(body.from_address,{sender_address_id:17});assert.deepEqual(body.ship_with,{type:'shipping_option_code',properties:{shipping_option_code:'dhl:parcel',contract_id:44}});assert.equal(body.to_address.house_number,'20');assert.equal(body.label_details.mime_type,'application/pdf');assert.equal(m.calls[1].init.headers['Idempotency-Key'],undefined);m.done();
+});
+
+test('omite la provincia española de cotizaciones guardadas al anunciar un envío',async()=>{
+  for(const province of [{state_province_code:'ES-M'},{state:'ES-M'}]){
+    const target={...destination,...province},original=structuredClone(target);
+    const m=mock([{path:'/shipments?external_reference_id=edg-shipping-123&page_size=2',result:json({data:[]})},{path:'/shipments/announce',method:'POST',result:json({data:shipment()},201)}]);
+    const result=await sendcloudProvider(config,m.fetcher).create({reference:'edg-shipping-123',sender,destination:target,parcel,option});
+    assert.equal(result.status,'label_created');
+    const body=JSON.parse(m.calls[1].init.body);
+    assert.deepEqual(body.to_address,{country_code:'ES',postal_code:'28001',city:'Madrid',address_line_1:'Calle Mayor',house_number:'20',name:destination.name,email:destination.email,phone_number:destination.telephone});
+    assert.deepEqual(target,original);m.done();
+  }
 });
 
 test('reutiliza una remesa confirmada por referencia sin emitir otro POST',async()=>{
