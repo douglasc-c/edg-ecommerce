@@ -158,6 +158,22 @@ function migrateV8(db) {
   try{apply();db.exec('COMMIT');}catch(error){db.exec('ROLLBACK');throw error;}
 }
 
+function migrateV9(db) {
+  const apply=()=>{
+    if(db.prepare('SELECT MAX(version) v FROM schema_version').get().v>=9)return;
+    db.exec(`
+      ALTER TABLE orders ADD COLUMN currency TEXT NOT NULL DEFAULT 'BRL' CHECK(currency IN ('BRL','EUR'));
+      ALTER TABLE orders ADD COLUMN payment_method TEXT NOT NULL DEFAULT 'mercadopago' CHECK(payment_method IN ('mercadopago','bank_transfer','stripe'));
+      ALTER TABLE orders ADD COLUMN payment_environment TEXT NOT NULL DEFAULT 'live' CHECK(payment_environment IN ('test','live'));
+      ALTER TABLE orders ADD COLUMN bank_transfer_details TEXT;
+      INSERT INTO schema_version VALUES(9);
+    `);
+  };
+  if(db.transactionSync)return db.transactionSync(apply);
+  db.exec('BEGIN IMMEDIATE');
+  try{apply();db.exec('COMMIT');}catch(error){db.exec('ROLLBACK');throw error;}
+}
+
 export function migrate(db) {
   migrateV2(db);
   migrateV3(db);
@@ -166,4 +182,5 @@ export function migrate(db) {
   migrateV6(db);
   migrateV7(db);
   migrateV8(db);
+  migrateV9(db);
 }

@@ -10,6 +10,8 @@ import { passwordRecovery,emailProvider } from './password-reset.mjs';
 import { fiscalProvider,invoiceService } from './invoices.mjs';
 import { sendcloudProvider } from './sendcloud.mjs';
 import { europeShipping } from './europe-shipping.mjs';
+import { europeCommerceProvider } from './europe-commerce.mjs';
+import { stripeProvider } from './stripe.mjs';
 import { campaignVideoPaths, campaignVideoResponse } from './video-response.mjs';
 import { suggestLanguage } from './language.mjs';
 import { HttpError, requireThat, text, integer, email, postal, passwordHash, passwordMatches, roles, permissions, token, hash, now } from './security.mjs';
@@ -31,10 +33,31 @@ export function configuration(env=process.env) {
     senderAddressId:env.SENDCLOUD_SENDER_ADDRESS_ID===undefined?undefined:String(env.SENDCLOUD_SENDER_ADDRESS_ID).trim()};
   requireThat(['test','live'].includes(c.sendcloud.environment),500,'SENDCLOUD_ENVIRONMENT debe ser test o live.');
   requireThat(!c.sendcloud.senderAddressId||/^[1-9]\d{0,14}$/.test(String(c.sendcloud.senderAddressId)),500,'SENDCLOUD_SENDER_ADDRESS_ID debe ser un identificador numérico positivo.');
-  if(c.mode!=='catalog')requireThat(c.currency==='BRL',500,'El checkout en EUR está pendiente de la integración europea. Usa el modo catalog.');
+  const enabled=env.EUROPE_CHECKOUT_ENABLED==='true',environment=env.PAYMENT_ENVIRONMENT||'test';
+  requireThat(env.EUROPE_CHECKOUT_ENABLED===undefined||['true','false'].includes(env.EUROPE_CHECKOUT_ENABLED),500,'EUROPE_CHECKOUT_ENABLED debe ser true o false.');
+  requireThat(['test','live'].includes(environment),500,'PAYMENT_ENVIRONMENT debe ser test o live.');
+  const bank={bank:env.BANK_TRANSFER_BANK||'Banco Sabadell',beneficiary:env.BANK_TRANSFER_BENEFICIARY||'EDG SKATEBOARDS S.L.',iban:String(env.BANK_TRANSFER_IBAN||'').replace(/\s/g,'').toUpperCase()};
+  const transferHours=Number(env.BANK_TRANSFER_RESERVATION_HOURS||72);
+  requireThat(Number.isInteger(transferHours)&&transferHours>=1&&transferHours<=168,500,'BANK_TRANSFER_RESERVATION_HOURS debe estar entre 1 y 168.');
+  c.europeCheckout={enabled,environment,bank,transferHours};
+  c.stripe={secretKey:env.STRIPE_SECRET_KEY,webhookSecret:env.STRIPE_WEBHOOK_SECRET,environment,enabled:Boolean(env.STRIPE_SECRET_KEY&&env.STRIPE_WEBHOOK_SECRET)};
+  if(c.stripe.secretKey)requireThat(typeof c.stripe.secretKey==='string'&&new RegExp(`^(sk|rk)_${environment}_[A-Za-z0-9]+$`).test(c.stripe.secretKey),500,'La clave Stripe debe corresponder a PAYMENT_ENVIRONMENT.');
+  if(c.stripe.webhookSecret)requireThat(typeof c.stripe.webhookSecret==='string'&&/^whsec_[A-Za-z0-9]+$/.test(c.stripe.webhookSecret),500,'STRIPE_WEBHOOK_SECRET no válido.');
+  if(enabled){
+    requireThat(c.currency==='EUR'&&c.mode==='catalog'&&c.shippingProvider==='sendcloud',500,'El checkout europeo requiere EUR, COMMERCE_MODE=catalog y Sendcloud.');
+    requireThat(Object.values(bank).every(value=>typeof value==='string'&&value.trim().length&&value.length<=150&&!/[\u0000-\u001f\u007f]/.test(value)),500,'Configura los datos del beneficiario de la transferencia.');
+    requireThat(/^ES\d{22}$/.test(bank.iban),500,'BANK_TRANSFER_IBAN debe ser un IBAN español completo de 24 caracteres.');
+    const digits=(bank.iban.slice(4)+bank.iban.slice(0,4)).replace(/[A-Z]/g,letter=>String(letter.charCodeAt(0)-55));
+    let remainder=0;for(const digit of digits)remainder=(remainder*10+Number(digit))%97;
+    requireThat(remainder===1,500,'BANK_TRANSFER_IBAN no supera la validación de control.');
+  }
+  if(c.mode!=='catalog')requireThat(c.currency==='BRL',500,'Para EUR utiliza COMMERCE_MODE=catalog y EUROPE_CHECKOUT_ENABLED.');
   return c;
 }
-export function createApp({db=database(),config=configuration(),provider=providers(config),mailer=emailProvider(config),fiscal=fiscalProvider(config),europeProvider=sendcloudProvider(config),runtime='node'}={}) {
+export function createApp({db=database(),config=configuration(),provider,mailer=emailProvider(config),fiscal=fiscalProvider(config),europeProvider=sendcloudProvider(config),stripe=stripeProvider(config),runtime='node'}={}) {
+  const euroCheckout=config.currency==='EUR'&&Boolean(config.europeCheckout?.enabled);
+  const stripeEnabled=euroCheckout&&Boolean(config.stripe?.enabled);
+  provider??=euroCheckout?europeCommerceProvider(config,europeProvider,stripe):providers(config);
   const shop=commerce(db,config,provider), buckets=new Map();
   const recovery=passwordRecovery(db,config,mailer),invoices=invoiceService(db,config,fiscal,shop);
   const europe=europeShipping(db,config,europeProvider);
@@ -74,13 +97,14 @@ export function createApp({db=database(),config=configuration(),provider=provide
         }
         if(!viewer || !['admin','finance','inventory'].includes(viewer.role)) for(const item of result.items)delete item.cost;
         if(!viewer || viewer.role==='customer')for(const item of result.items)delete item.fiscal;
-        result.invoice=invoices.get(result.id);
+        result.invoice=result.currency==='EUR'?null:invoices.get(result.id);
+        delete result.bank_transfer_details;
       }
       return result;
     }
     const respond=(data,status=200)=>{res.writeHead(status,{'Content-Type':'application/json; charset=utf-8','Cache-Control':'no-store'});res.end(JSON.stringify(sanitize(data)));};
     if(path==='/api/health' && method==='GET') return respond({status:'ok'});
-    if(path==='/api/config' && method==='GET') return respond({name:config.storeName,mode:config.mode,language:'es',locale:'es-ES',...suggestLanguage({country:runtime==='worker'?req.country:null,acceptLanguage:req.headers['accept-language']}),currency:config.currency||'BRL',checkout_enabled:config.mode!=='catalog',payment:config.currency==='EUR'?'Pendiente de integración':'Mercado Pago',shipping:config.shippingProvider==='sendcloud'?'Sendcloud':'Melhor Envio',shipping_provider:config.shippingProvider,shipping_environment:config.sendcloud?.environment||'test',fiscal_environment:config.mode==='demo'?'demo':config.nfeEnvironment,email_enabled:config.mode==='demo'||Boolean(config.resendKey&&config.emailFrom&&config.emailKey)});
+    if(path==='/api/config' && method==='GET') return respond({name:config.storeName,mode:config.mode,language:'es',locale:'es-ES',...suggestLanguage({country:runtime==='worker'?req.country:null,acceptLanguage:req.headers['accept-language']}),currency:config.currency||'BRL',checkout_enabled:config.mode!=='catalog'||euroCheckout,payment:config.currency==='EUR'?(euroCheckout?'Transferencia bancaria':'Pendiente de integración'):'Mercado Pago',payment_methods:euroCheckout?['bank_transfer',...(stripeEnabled?['stripe']:[])]:[],payment_environment:config.europeCheckout?.environment||'test',shipping:config.shippingProvider==='sendcloud'?'Sendcloud':'Melhor Envio',shipping_provider:config.shippingProvider,shipping_environment:config.sendcloud?.environment||'test',fiscal_environment:config.mode==='demo'?'demo':config.nfeEnvironment,email_enabled:config.mode==='demo'||Boolean(config.resendKey&&config.emailFrom&&config.emailKey)});
     if(path==='/api/products' && method==='GET') {shop.expire(); return respond(shop.products());}
     if(path==='/api/categories' && method==='GET') return respond(shop.categories().map(({name,image})=>({name,image})));
     if(path==='/api/auth/me' && method==='GET') {const u=session(req,false);return respond({user:u?publicUser(u):null,csrf:u?.csrf||null});}
@@ -91,7 +115,35 @@ export function createApp({db=database(),config=configuration(),provider=provide
       for await(const chunk of req){size+=chunk.length;requireThat(size<=262144,413,'Solicitud demasiado grande.');chunks.push(chunk);}
       return respond(await europe.webhook(req.headers,Buffer.concat(chunks)));
     }
-    if(config.mode==='catalog' && ((path.startsWith('/api/webhooks/')) || (method!=='GET' && (path.startsWith('/api/cart/') || path==='/api/shipping/quote' || path==='/api/checkout' || /^\/api\/orders\/[^/]+\/(demo-pay|payment)$/.test(path)))))throw new HttpError(503,'Tienda en preparación. Las compras aún no están disponibles.');
+    if(path==='/api/webhooks/stripe'&&method==='POST'){
+      requireThat(stripeEnabled,503,'La integración Stripe no está activada.');limited(req,'stripe-webhook',120);
+      let size=0;const chunks=[];
+      for await(const chunk of req){size+=chunk.length;requireThat(size<=262144,413,'Solicitud demasiado grande.');chunks.push(chunk);}
+      const notification=stripe.verifyWebhook(req.headers,Buffer.concat(chunks));
+      if(['checkout.session.completed','checkout.session.async_payment_succeeded'].includes(notification.type)){
+        const id=notification.data?.object?.id;
+        requireThat(typeof id==='string',400,'Notificación Stripe no válida.');
+        await shop.applyStripeSession(await stripe.retrieveSession(id));
+      }else if(notification.type==='charge.refunded'){
+        const charge=notification.data?.object,paymentIntent=typeof charge?.payment_intent==='string'?charge.payment_intent:null;
+        const orderId=typeof charge?.metadata?.order_id==='string'?charge.metadata.order_id:null;
+        const current=(paymentIntent&&get("SELECT * FROM orders WHERE currency='EUR' AND payment_method='stripe' AND payment_id=?",paymentIntent))
+          ||(orderId&&get("SELECT * FROM orders WHERE currency='EUR' AND payment_method='stripe' AND id=?",orderId));
+        if(current){
+          if(!current.payment_id){
+            // El reembolso puede llegar antes que checkout.session.completed.
+            // Se reconcilia la sesión persistida antes de modificar el pedido.
+            requireThat(current.preference_id,503,'La sesión de pago aún no está disponible. Reintenta la notificación.');
+            const paymentSession=await stripe.retrieveSession(current.preference_id);
+            requireThat(paymentSession.payment_intent===paymentIntent,409,'El reembolso no corresponde a la sesión del pedido.');
+            await shop.applyStripeRefund(charge,paymentSession);
+          }else await shop.applyStripeRefund(charge);
+        }
+      }
+      return respond({received:true});
+    }
+    if(config.currency==='EUR'&&['/api/webhooks/melhorenvio','/api/webhooks/mercadopago'].includes(path))throw new HttpError(503,'Este proveedor no está activado para EUR.');
+    if(config.mode==='catalog'&&!euroCheckout&&((path.startsWith('/api/webhooks/')) || (method!=='GET' && (path.startsWith('/api/cart/') || path==='/api/shipping/quote' || path==='/api/checkout' || /^\/api\/orders\/[^/]+\/(demo-pay|payment)$/.test(path)))))throw new HttpError(503,'Tienda en preparación. Las compras aún no están disponibles.');
     if(path==='/api/webhooks/melhorenvio' && method==='POST') {
       limited(req,'shipping-webhook',120); let size=0;const chunks=[];
       for await(const chunk of req){size+=chunk.length;requireThat(size<=65536,413,'Solicitud demasiado grande.');chunks.push(chunk);}
@@ -141,10 +193,11 @@ export function createApp({db=database(),config=configuration(),provider=provide
     if(path==='/api/cart' && method==='GET') return respond(shop.cart(user.id));
     let match;
     if((match=path.match(/^\/api\/cart\/([^/]+)$/)) && method==='PUT') {const b=await body(req);return respond(shop.setCart(user,match[1],b.quantity,b.variant_id));}
-    if(path==='/api/shipping/quote' && method==='POST') {const b=await body(req);return respond(await shop.quote(user,postal(b.postal_code)));}
+    if(path==='/api/shipping/quote' && method==='POST') {const b=await body(req);return respond(await shop.quote(user,euroCheckout?b.address:postal(b.postal_code)));}
     if(path==='/api/coupons/check' && method==='POST') {const b=await body(req);shop.expire();return respond(shop.coupons.calculate(user,shop.cart(user.id).subtotal,b.code));}
     if(path==='/api/checkout' && method==='POST') return respond(await shop.checkout(user,await body(req),req.headers['idempotency-key']),201);
     if(path==='/api/orders' && method==='GET') return respond(shop.listOrders(user));
+    if(config.currency==='EUR'&&(/\/invoice(?:\/|-|$)/.test(path)||path==='/api/admin/invoices'))throw new HttpError(503,'La facturación brasileña no está disponible para los pedidos en EUR.');
     if((match=path.match(/^\/api\/orders\/([^/]+)\/invoice\/(pdf|xml)$/)) && method==='GET'){const [_,id,kind]=match;shop.order(id,user,permissions[user.role]?.includes('orders'));const content=await invoices.download(id,kind);res.writeHead(200,{'Content-Type':kind==='pdf'?'application/pdf':'application/xml','Content-Disposition':`attachment; filename="nfe-${id}.${kind}"`,'Cache-Control':'no-store'});return res.end(content);}
     if((match=path.match(/^\/api\/orders\/([^/]+)$/)) && method==='GET') return respond(shop.order(match[1],user));
     if((match=path.match(/^\/api\/orders\/([^/]+)\/(cancel|demo-pay|payment)$/)) && method==='POST') {
@@ -152,6 +205,9 @@ export function createApp({db=database(),config=configuration(),provider=provide
       return respond(action==='cancel'?shop.cancel(user,id):action==='demo-pay'?shop.demoPay(user,id):await shop.paymentLink(user,id));
     }
     requireThat(path.startsWith('/api/admin/'),404,'Ruta no encontrada.');
+    if((match=path.match(/^\/api\/admin\/orders\/([^/]+)\/confirm-transfer$/))&&method==='POST'){
+      allowed(user,'finance');requireThat(euroCheckout,503,'El checkout europeo no está activado.');return respond(shop.confirmTransfer(user,match[1],await body(req)));
+    }
     if(path.startsWith('/api/admin/europe-shipping/')) {
       allowed(user,'shipping');
       requireThat(config.shippingProvider==='sendcloud',503,'La integración Sendcloud no está activada.');

@@ -2,7 +2,7 @@
 
 El proyecto incluye un Worker listo para el **modo catálogo**, con gestión real de productos, fotos, precios, existencias, movimientos y usuarios. El escaparate está disponible e indica «Tienda en preparación». El carrito, los presupuestos del proceso de compra, el pago simulado y los webhooks de Mercado Pago y Melhor Envio están bloqueados en la API. El módulo administrativo **Envíos europeos** y su webhook de Sendcloud tienen un flujo independiente, descrito en [SENDCLOUD.md](SENDCLOUD.md). El catálogo no cobra ni reserva nada.
 
-El archivo `wrangler.jsonc` utiliza `APP_URL=https://www.edgskateboards.com`, `COMMERCE_MODE=catalog`, `STORE_CURRENCY=EUR`, `SHIPPING_PROVIDER=sendcloud` y `SENDCLOUD_ENVIRONMENT=test`. En esta etapa no es necesario introducir credenciales del banco español, de Mercado Pago ni de Melhor Envio. La integración europea de pagos y facturación sigue pendiente; cambiar únicamente a `live` no habilita pagos en euros. La traducción al español tampoco cambia el módulo fiscal brasileño de Focus NFe.
+El archivo `wrangler.jsonc` utiliza `APP_URL=https://www.edgskateboards.com`, `COMMERCE_MODE=catalog`, `STORE_CURRENCY=EUR`, `SHIPPING_PROVIDER=sendcloud` y `SENDCLOUD_ENVIRONMENT=test`. En esta etapa no es necesario introducir credenciales del banco español, de Mercado Pago ni de Melhor Envio. La facturación española sigue pendiente. Para habilitar transferencia Sabadell y tarjeta Stripe opcional sigue [EUROPE_CHECKOUT.md](EUROPE_CHECKOUT.md); cambiar únicamente `COMMERCE_MODE` a `live` no habilita este checkout. La traducción al español tampoco cambia el módulo fiscal brasileño de Focus NFe.
 
 ## 1. Actualizar el proyecto
 

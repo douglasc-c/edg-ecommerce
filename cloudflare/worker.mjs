@@ -5,6 +5,7 @@ import { email, passwordHash, now } from '../src/security.mjs';
 import { durableDatabase } from './database.mjs';
 import { campaignVideoPaths, campaignVideoResponse } from '../src/video-response.mjs';
 import { normalizeCountry } from '../src/language.mjs';
+import { commerceStoreName } from './store-selection.mjs';
 
 const storeUnavailable=()=>Response.json({error:'La tienda no está disponible en este momento. Vuelve a intentarlo más tarde.'},{status:503,headers:{'Content-Language':'es','Cache-Control':'no-store'}});
 
@@ -50,7 +51,7 @@ export default {
       const headers=new Headers(request.headers),country=normalizeCountry(request.cf?.country);
       headers.delete('x-edg-country');
       if(country)headers.set('x-edg-country',country);
-      try{return await env.STORE.getByName('primary').fetch(new Request(request,{headers}));}
+      try{return await env.STORE.getByName(commerceStoreName(env)).fetch(new Request(request,{headers}));}
       catch(error){console.error('No se ha podido acceder a la tienda:',error.message);return storeUnavailable();}
     }
     const campaignVideo=campaignVideoPaths.has(path)&&['GET','HEAD'].includes(request.method);
@@ -76,5 +77,5 @@ export default {
     headers.set('Strict-Transport-Security','max-age=31536000');
     return new Response(request.method==='HEAD'?null:response.body,{status:response.status,headers});
   },
-  async scheduled(controller,env,ctx){ctx.waitUntil(env.STORE.getByName('primary').maintenance());}
+  async scheduled(controller,env,ctx){ctx.waitUntil(env.STORE.getByName(commerceStoreName(env)).maintenance());}
 };

@@ -4,7 +4,7 @@ El módulo **Gestión → Envíos europeos** (`/#europe-shipping`) permite prepa
 
 El alcance inicial es un bulto por envío, desde Barcelona a España peninsular y Baleares (`ES`). Los destinos internacionales quedan fuera del alcance inicial; los envíos internacionales ya registrados conservan su historial, seguimiento y descarga de etiqueta cuando esté disponible. No se admiten Canarias, Ceuta ni Melilla (códigos postales españoles que empiezan por `35`, `38`, `51` o `52`). Cada envío requiere el peso en kg y las tres medidas exteriores del bulto embalado en cm. No se deducen de un único producto.
 
-Este módulo no modifica el inventario, las reservas, los pagos ni los apuntes financieros. No habilita el carrito ni el pago en EUR: mantén `COMMERCE_MODE=catalog` mientras se prepara la integración europea de pagos. La facturación española también es independiente y sigue pendiente.
+Este módulo no modifica el inventario, las reservas, los pagos ni los apuntes financieros. No habilita el carrito ni el pago en EUR: mantén `COMMERCE_MODE=catalog`. El checkout EUR se activa por separado siguiendo [EUROPE_CHECKOUT.md](EUROPE_CHECKOUT.md). La facturación española también es independiente y sigue pendiente.
 
 ## 1. Preparar la cuenta y el remitente
 
