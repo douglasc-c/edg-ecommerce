@@ -6,6 +6,8 @@ import { durableDatabase } from './database.mjs';
 import { campaignVideoPaths, campaignVideoResponse } from '../src/video-response.mjs';
 import { normalizeCountry } from '../src/language.mjs';
 
+const storeUnavailable=()=>Response.json({error:'La tienda no está disponible en este momento. Vuelve a intentarlo más tarde.'},{status:503,headers:{'Content-Language':'es','Cache-Control':'no-store'}});
+
 // Un objeto estable es propietario de la base de datos de esta tienda. Nunca se deriva su nombre de la entrada del usuario.
 export class CommerceStore extends DurableObject {
   constructor(ctx,env){super(ctx,env);this.app=null;this.initializing=null;}
@@ -27,15 +29,16 @@ export class CommerceStore extends DurableObject {
   }
   async fetch(request){
     try{
-      // Serializa la inicialización, incluida la derivación asíncrona de la contraseña.
-      await this.ctx.blockConcurrencyWhile(()=>this.initialize());
+      // initialize comparte una promesa, incluida la derivación de la contraseña.
+      // Una excepción en blockConcurrencyWhile terminaría el objeto antes del catch.
+      await this.initialize();
       return await new Promise((resolve,reject)=>{
         const headers=new Headers();let status=200;
         const response={headersSent:false,setHeader(k,v){headers.set(k,v);},writeHead(code,values){status=code;for(const [k,v] of Object.entries(values))headers.set(k,v);this.headersSent=true;},end(content){resolve(new Response(request.method==='HEAD'?null:content??null,{status,headers}));}};
         const req={url:request.url,method:request.method,headers:Object.fromEntries(request.headers),country:normalizeCountry(request.headers.get('x-edg-country')),socket:{remoteAddress:request.headers.get('cf-connecting-ip')||'unknown'},async *[Symbol.asyncIterator](){if(request.body){for await(const chunk of request.body)yield Buffer.from(chunk);}}};
         this.app.handler(req,response).catch(reject);
       });
-    }catch(error){console.error('Tienda no disponible:',error.message);return Response.json({error:'Tienda no disponible. Revisa APP_URL, ADMIN_EMAIL y ADMIN_PASSWORD en la configuración del Worker.'},{status:503,headers:{'Content-Language':'es'}});}
+    }catch(error){console.error('Tienda no disponible:',error.message);return storeUnavailable();}
   }
   async maintenance(){await this.initialize();this.app.shop.expire();await this.app.recovery.flush();}
 }
@@ -47,7 +50,8 @@ export default {
       const headers=new Headers(request.headers),country=normalizeCountry(request.cf?.country);
       headers.delete('x-edg-country');
       if(country)headers.set('x-edg-country',country);
-      return env.STORE.getByName('primary').fetch(new Request(request,{headers}));
+      try{return await env.STORE.getByName('primary').fetch(new Request(request,{headers}));}
+      catch(error){console.error('No se ha podido acceder a la tienda:',error.message);return storeUnavailable();}
     }
     const campaignVideo=campaignVideoPaths.has(path)&&['GET','HEAD'].includes(request.method);
     let assetRequest=request;

@@ -47,6 +47,10 @@ La URL y el correo electrónico se guardan como secretos para que el siguiente d
 
 Abre la tienda. El primer acceso a la API crea el administrador. Inicia sesión con el correo electrónico y la contraseña y abre **Gestión** (o `/#admin`). Tras confirmar el inicio de sesión, puedes eliminar `ADMIN_PASSWORD` con `npx wrangler secret delete ADMIN_PASSWORD`: la cuenta ya está guardada de forma persistente. Cambiar ese secreto después no modifica la contraseña de una cuenta existente; utiliza «Mi cuenta» para cambiarla.
 
+### Si la tienda no puede iniciarse
+
+La API devuelve JSON con estado 503 y sin caché cuando falla la inicialización o no se puede acceder al binding `STORE`. El navegador también muestra un aviso de disponibilidad si Cloudflare devuelve HTML en lugar de JSON. Este aviso no corrige la causa del fallo: consulta los logs del Worker al recargar la tienda y busca `Tienda no disponible:` o `No se ha podido acceder a la tienda:`. El mensaje del servidor identifica la configuración o la operación que falló. Comprueba `APP_URL` y el modo de comercio si el log los señala; `ADMIN_EMAIL` y `ADMIN_PASSWORD` solo se necesitan para crear el primer administrador. No recrees el Worker ni el almacenamiento para corregir una configuración.
+
 ### Cambiar al dominio propio
 
 Al vincular el dominio, actualiza el secreto **APP_URL** en **Workers & Pages → edg-ecommerce → Settings → Variables and Secrets** y aplica los cambios. Para la tienda europea, el origen público es `https://www.edgskateboards.com` (sin rutas ni espacios).

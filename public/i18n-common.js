@@ -729,6 +729,7 @@ window.EDGCommonMessages = (() => {
     ["Seguimiento actualizado", "Tracking updated", "Rastreamento atualizado"],
     ["Gasto registrado", "Expense recorded", "Despesa registrada"],
     ["No se ha podido completar la operación.", "The operation could not be completed.", "Não foi possível concluir a operação."],
+    ["La tienda no está disponible en este momento. Vuelve a intentarlo más tarde.", "The store is currently unavailable. Please try again later.", "A loja está indisponível no momento. Tente novamente mais tarde."],
     ["No se ha podido cargar", "Unable to load", "Não foi possível carregar"],
     ["Actualiza la página para volver a intentarlo.", "Refresh the page to try again.", "Atualize a página para tentar novamente."],
     ["No se ha podido iniciar la tienda", "The store could not be loaded", "Não foi possível iniciar a loja"],
