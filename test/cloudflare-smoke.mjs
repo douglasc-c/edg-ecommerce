@@ -17,7 +17,34 @@ try{
     // This binding intentionally ignores Range, matching the production failure.
     serviceBindings:{ASSETS:async request=>new Response(await readFile(resolve('public',new URL(request.url).pathname==='/'?'index.html':new URL(request.url).pathname.slice(1))),{headers:{ETag:'W/"asset"','Cache-Control':'public, max-age=60'}})}};
   const create=opts=>new Miniflare({...convertV4MiniflareOptions(opts),resourcePersistencePath:join(directory,"storage")});
+  // Configuration failures must be JSON responses, not an uncaught workerd
+  // exception/HTML page. Correcting the binding must allow the same store to boot.
+  for(const bindings of [
+    Object.fromEntries(Object.entries(options.bindings).filter(([key])=>key!=='APP_URL')),
+    {...options.bindings,APP_URL:'not-an-origin'},
+    {...options.bindings,COMMERCE_MODE:'invalid'},
+    {...options.bindings,ADMIN_PASSWORD:''},
+  ]){
+    mf=create({...options,bindings});
+    const response=await mf.dispatchFetch(origin+'/api/config');
+    assert.equal(response.status,503,'A failed initialization returns service unavailable');
+    assert.match(response.headers.get('content-type'),/application\/json/);
+    assert.equal(response.headers.get('cache-control'),'no-store');
+    assert.equal(typeof (await response.json()).error,'string');
+    const retry=await mf.dispatchFetch(origin+'/api/config');
+    assert.equal(retry.status,503,'A failed initialization can be retried without terminating the object');
+    await retry.json();
+    await mf.dispose();mf=null;
+  }
+  mf=create({...options,durableObjects:{}});
+  const missingStore=await mf.dispatchFetch(origin+'/api/config');
+  assert.equal(missingStore.status,503,'A missing STORE binding is handled by the entry point');
+  assert.match(missingStore.headers.get('content-type'),/application\/json/);
+  await missingStore.json();
+  await mf.dispose();
   mf=create(options);
+  const coldStart=await Promise.all(['/api/config','/api/products','/api/auth/me'].map(path=>mf.dispatchFetch(origin+path)));
+  for(const response of coldStart){assert.equal(response.status,200,'Concurrent requests share initialization');await response.json();}
   const skateAsset=await mf.dispatchFetch(origin+'/skate.js');
   assert.equal(skateAsset.status,200);
   const assetCsp=skateAsset.headers.get('content-security-policy');

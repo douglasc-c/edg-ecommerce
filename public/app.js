@@ -22,8 +22,23 @@ const field=(name,label,value='',type='text',extra='')=>`<label class="field">${
 const empty=(title,description='')=>`<div class="empty"><strong>${escape(title)}</strong>${escape(description)}</div>`;
 function toast(message,error=false){const t=$('#toast');t.textContent=message;t.className=`show${error?' error':''}`;clearTimeout(toast.timer);toast.timer=setTimeout(()=>t.className='',6000);}
 async function api(path,options={}) {
-  const response=await fetch(`/api${path}`,{credentials:'same-origin',...options,headers:{'Content-Type':'application/json',...(state.csrf?{'X-CSRF-Token':state.csrf}:{}),...options.headers},...(options.body?{body:JSON.stringify(options.body)}:{})});
-  const result=await response.json(); if(!response.ok){const error=new Error(result.error||'No se ha podido completar la operación.');error.status=response.status;throw error;}return result;
+  const response=await fetch(`/api${path}`,{credentials:'same-origin',...options,headers:{'Accept':'application/json','Content-Type':'application/json',...(state.csrf?{'X-CSRF-Token':state.csrf}:{}),...options.headers},...(options.body?{body:JSON.stringify(options.body)}:{})});
+  const contentType=response.headers.get('content-type')||'';
+  const unavailable=()=>{
+    console.error('EDG API unavailable:',{path:path.split('?')[0],status:response.status,contentType});
+    const error=new Error('La tienda no está disponible en este momento. Vuelve a intentarlo más tarde.');
+    error.status=response.status;return error;
+  };
+  if(!/^application\/(?:[\w.+-]+\+)?json(?:\s*;|\s*$)/i.test(contentType))throw unavailable();
+  let result;
+  try{result=await response.json();}catch{throw unavailable();}
+  if(!result||typeof result!=='object'||result.cloudflare_error)throw unavailable();
+  if(!response.ok){
+    if(response.status>=500&&typeof result.error!=='string')throw unavailable();
+    const error=new Error(typeof result.error==='string'?result.error:'No se ha podido completar la operación.');
+    error.status=response.status;throw error;
+  }
+  return result;
 }
 function dialog(title,content,literalTitle=false){const d=$('#dialog');d.classList.remove('product-editor-dialog','product-detail-dialog');d.innerHTML=`<div class="dialog-head"><h2 id="dialog-title"${literalTitle?' translate="no"':''}>${escape(title)}</h2><button class="icon-btn" data-action="close" aria-label="Cerrar">×</button></div><div class="dialog-body">${content}</div>`;if(!d.open)d.showModal();}
 function closeDialog(){ $('#dialog').close(); }
