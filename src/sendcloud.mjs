@@ -5,6 +5,31 @@ import { HttpError, requireThat, safeLink } from './security.mjs';
 const BASE='https://panel.sendcloud.sc/api/v3';
 const LABEL_STATUSES=new Set(['READY_TO_SEND','ANNOUNCED','LABELLED']);
 const MAX_PDF=10*1024*1024;
+const ERROR_CODES=new Set(['unknown_field','invalid','forbidden','invalid_choice','min_value','null','not_found','required','not_a_list','non_field_errors','authentication_failed','validation_error','parcel_announcement_error']);
+const ERROR_FIELDS=new Set(['data','attributes','from_address','to_address','parcels','country_code','postal_code','city','address_line_1','state_province_code','dimensions','weight','value','unit','width','height','length','contract_id','carrier_code','calculate_quotes','functionalities','shipping_product_code','shipping_option_code','sender_address_id','from_country_code','to_country_code','from_postal_code','to_postal_code','non_field_errors']);
+const escapeRegex=value=>value.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');
+function privateStrings(value,key=''){return ['country_code','state_province_code'].includes(key)?[]:typeof value==='string'?[value]:value&&typeof value==='object'?Object.entries(value).flatMap(([key,value])=>privateStrings(value,key)):[];}
+async function rejectionDetails(response,privateValues){
+  // Leer solo el JSON de error y limitarlo; nunca registrar el cuerpo completo.
+  if(!/\bjson\b/i.test(response.headers.get('content-type')||'')||!response.body)return [];
+  const reader=response.body.getReader(),chunks=[];let size=0;
+  try{
+    while(true){const {done,value}=await reader.read();if(done)break;size+=value.byteLength;if(size>16384){await reader.cancel();return [];}chunks.push(Buffer.from(value));}
+    const data=JSON.parse(Buffer.concat(chunks).toString('utf8'));
+    const errors=Array.isArray(data?.errors)?data.errors:data?.errors&&typeof data.errors==='object'?[data.errors]:[];
+    const hidden=[...new Set(privateValues.filter(value=>typeof value==='string'&&value.length).flatMap(value=>[value,encodeURIComponent(value)]))].sort((a,b)=>b.length-a.length);
+    return errors.slice(0,5).filter(error=>error&&typeof error==='object').map(error=>{
+      const source=error.source?.pointer??error.source?.parameter;
+      const parts=typeof source==='string'?source.split(/[/.]/).filter(Boolean):[];
+      const field=parts.length&&parts.length<=8&&parts.every(part=>ERROR_FIELDS.has(part)||/^\d{1,3}$/.test(part))?parts.join('.'):null;
+      let detail=typeof error.detail==='string'&&error.detail.length<=1000&&!/[<>]/.test(error.detail)?error.detail:'';
+      for(const value of hidden)detail=detail.replace(new RegExp(value.length<3?`\\b${escapeRegex(value)}\\b`:escapeRegex(value),'gi'),'[redactado]');
+      detail=detail.replace(/https?:\/\/\S+|[\w.+-]+@[\w.-]+\.[a-z]{2,}/gi,'[redactado]').replace(/[\u0000-\u001f\u007f]/g,' ').replace(/\s+/g,' ').trim().slice(0,300);
+      return {...(ERROR_CODES.has(error.code)?{code:error.code}:{}),...(field?{field}:{}),...(detail?{detail}:{})};
+    }).filter(error=>Object.keys(error).length);
+  }catch{return [];}
+  finally{reader.releaseLock();}
+}
 function identifier(value,label,numeric=false) {
   const id=String(value??'');
   requireThat(numeric?/^[1-9]\d{0,14}$/.test(id):/^[A-Za-z0-9_-]{1,128}$/.test(id),400,`${label} no válido.`);
@@ -68,14 +93,14 @@ function receipt(data,parcelId=null) {
 function providerError(message,{status=502,uncertain=false,rejected=false,code='SENDCLOUD_ERROR'}={}) {
   const error=new HttpError(status,message);Object.assign(error,{uncertain,rejected,code});return error;
 }
-export function sendcloudProvider(config,fetcher=fetch) {
+export function sendcloudProvider(config,fetcher=fetch,report=entry=>console.error('Sendcloud API error:',JSON.stringify(entry))) {
   const settings=config.sendcloud||{};
   function credentials() {
     requireThat(settings.publicKey && settings.secretKey,503,'Configura las credenciales de Sendcloud.');
     requireThat(typeof settings.publicKey==='string' && typeof settings.secretKey==='string',503,'Credenciales de Sendcloud no válidas.');
     return `Basic ${Buffer.from(`${settings.publicKey}:${settings.secretKey}`).toString('base64')}`;
   }
-  async function request(path,{method='GET',body,accept='application/json',binary=false,allowConflict=false}={}) {
+  async function request(path,{method='GET',body,accept='application/json',binary=false,allowConflict=false,privateData=[]}={}) {
     // El host es constante y no se siguen redirecciones con credenciales.
     const headers={Authorization:credentials(),Accept:accept};
     if(body)headers['Content-Type']='application/json';
@@ -86,7 +111,20 @@ export function sendcloudProvider(config,fetcher=fetch) {
     if(response.status>=300 && response.status<400)throw providerError('Sendcloud ha devuelto una redirección inesperada. No se ha seguido para proteger las credenciales.',{uncertain:method!=='GET',code:'SENDCLOUD_REDIRECT'});
     if(!response.ok && !(allowConflict && response.status===409)) {
       const status=response.status===404?404:[400,422].includes(response.status)?422:[401,403,429].includes(response.status)?503:502;
-      throw providerError(response.status===404?'Remesa o documento no encontrado en Sendcloud.':status===503?'Sendcloud no está disponible o requiere revisar las credenciales.':'Sendcloud ha rechazado la solicitud. Revisa los datos en su panel.',{status,uncertain:method!=='GET'&&response.status>=500,rejected:response.status>=400&&response.status<500});
+      let message=response.status===404?'Remesa o documento no encontrado en Sendcloud.':status===503?'Sendcloud no está disponible o requiere revisar las credenciales.':'Sendcloud ha rechazado la solicitud. Revisa los datos en su panel.';
+      const operation=path==='/shipping-options'?'quote':path.startsWith('/addresses/sender-addresses/')?'sender':null;
+      let provider;
+      if(operation){
+        const errors=await rejectionDetails(response,[settings.publicKey,settings.secretKey,settings.webhookSecret,headers.Authorization,headers.Authorization.slice(6),...privateStrings(privateData)]);
+        provider={name:'sendcloud',operation,status:response.status,errors};
+        report({...provider,errors:errors.map(({detail,...error})=>error)});
+        message=operation==='quote'?`No se han podido consultar las tarifas en Sendcloud (HTTP ${response.status}).`:`No se ha podido consultar el remitente en Sendcloud (HTTP ${response.status}).`;
+        const detail=errors.map(error=>[error.field,error.detail].filter(Boolean).join(': ')).filter(Boolean).join(' ');
+        if(detail)message+=` ${detail}`;
+      }
+      const error=providerError(message,{status,uncertain:method!=='GET'&&response.status>=500,rejected:response.status>=400&&response.status<500});
+      if(provider)error.provider=provider;
+      throw error;
     }
     if(binary) {
       requireThat((response.headers.get('content-type')||'').split(';')[0]==='application/pdf',502,'Sendcloud no ha devuelto un PDF.');
@@ -134,7 +172,7 @@ export function sendcloudProvider(config,fetcher=fetch) {
     async quote({sender,destination,parcel}) {
       requireThat(sender?.country_code==='ES',400,'El origen del envío debe estar en España.');
       const pack=parcelPayload(parcel);
-      const {data}=await request('/shipping-options',{method:'POST',body:{from_address:apiAddress(sender,{forQuote:true}),to_address:apiAddress(destination,{forQuote:true}),parcels:[pack],calculate_quotes:true}});
+      const {data}=await request('/shipping-options',{method:'POST',body:{from_address:apiAddress(sender,{forQuote:true}),to_address:apiAddress(destination,{forQuote:true}),parcels:[pack],calculate_quotes:true},privateData:[sender,destination]});
       requireThat(Array.isArray(data?.data),502,'Respuesta de cotización de Sendcloud no válida.');
       const options=[];
       for(const option of data.data) {

@@ -71,6 +71,8 @@ También puedes añadir los secretos en el Worker, en **Settings → Variables a
 
 La consulta de remitentes y tarifas utiliza **la API real y las credenciales de tu cuenta**, incluso con `SENDCLOUD_ENVIRONMENT=test`. Consultar tarifas no crea un envío ni contrata una etiqueta. Una lista vacía puede indicar que faltan servicios activados o que no hay servicios compatibles con la ruta, el peso o las dimensiones. Si el contrato no tiene tarifas disponibles, no se inventa un precio.
 
+Si Sendcloud rechaza una consulta, la respuesta de la API de la tienda incluye `provider.operation` (`sender` o `quote`), el estado HTTP original y sus errores JSON:API con el código, el campo y el detalle disponible. El aviso de la interfaz también muestra el estado y el motivo. Se ocultan las credenciales y los valores de las direcciones enviados en la consulta; no se devuelven cuerpos HTML ni respuestas de error excesivas. Los logs `Sendcloud API error:` conservan únicamente la operación, el estado, los códigos y los campos. Comparte ese diagnóstico para investigar la causa; no cambies a `live` para intentar corregir una consulta fallida. Un rechazo no demuestra por sí solo que falten transportistas: la [API de opciones y tarifas](https://sendcloud.dev/api/v3/shipping-options/return-a-list-of-available-shipping-options) también puede rechazar datos o contratos.
+
 Las tarifas dependen de las condiciones de la cuenta y del paquete. No garantizan un plazo concreto ni sustituyen las condiciones del transportista; comprueba recargos y condiciones de facturación en Sendcloud.
 
 ## 5. Simular la creación sin contratar transporte

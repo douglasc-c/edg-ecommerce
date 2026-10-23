@@ -86,3 +86,19 @@ test('un rechazo definitivo consume la cotización sin presentarlo como resultad
   await expect(page.locator('.eu-shipment')).toContainText('Solicitud rechazada');await expect(page.locator('.eu-uncertain')).toHaveCount(0);await expect(page.getByRole('button',{name:'Revisar contratación',exact:true})).toHaveCount(0);await expect(page.getByRole('button',{name:'Consultar tarifas',exact:true})).toBeEnabled();
   await page.getByRole('button',{name:'Consultar tarifas',exact:true}).click();await expect(page.getByRole('button',{name:'Revisar contratación',exact:true})).toBeEnabled();expect(calls.creates).toHaveLength(1);expect(calls.quotes).toHaveLength(2);
 });
+
+for(const [language,prefix] of [['en','Sendcloud rates could not be retrieved (HTTP 400).'],['pt-BR','Não foi possível consultar as tarifas no Sendcloud (HTTP 400).']]){
+  test(`muestra el motivo de la tarifa rechazada en ${language} y conserva el formulario`,async({page})=>{
+    const {calls}=await europeFixture(page);
+    await page.addInitScript(language=>localStorage.setItem('edg.language',language),language);
+    await page.route('**/api/admin/europe-shipping/quote',route=>route.fulfill({status:422,json:{error:'No se han podido consultar las tarifas en Sendcloud (HTTP 400). contract_id: Invalid contract.',provider:{name:'sendcloud',operation:'quote',status:400,errors:[{code:'invalid',field:'contract_id',detail:'Invalid contract.'}]}}}));
+    await page.goto('/#europe-shipping');await fillShipment(page);
+    await page.locator('#eu-shipping-form button[type="submit"]').click();
+    await expect(page.locator('#toast')).toHaveText(`${prefix} contract_id: Invalid contract.`);
+    await expect(page.locator('#eu-quote-results [role="alert"]')).toHaveText(`${prefix} contract_id: Invalid contract.`);
+    await expect(page.locator('#eu-shipping-form [name="postal_code"]')).toHaveValue('08001');
+    await expect(page.locator('#eu-shipping-form [name="weight"]')).toHaveValue('1.25');
+    await expect(page.locator('#eu-shipping-form button[type="submit"]')).toBeEnabled();
+    await expect(page.locator('.eu-shipment')).toHaveCount(0);expect(calls.creates).toHaveLength(0);
+  });
+}

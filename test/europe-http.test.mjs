@@ -101,6 +101,20 @@ test('HTTP europeo: sesión, permiso de expedición, origen y CSRF protegen todo
   const check=await f.call(base+'/check',{method:'POST',headers:f.users.shipping});assert.equal(check.status,200);
 });
 
+test('HTTP europeo: devuelve el diagnóstico de la tarifa solo a usuarios autorizados y sin guardar envíos',async t=>{
+  const f=fixture(t),provider={name:'sendcloud',operation:'quote',status:400,errors:[{code:'invalid',field:'contract_id',detail:'Invalid contract.'}]};
+  f.provider.quote=async()=>{throw Object.assign(new HttpError(422,'No se han podido consultar las tarifas en Sendcloud (HTTP 400). Invalid contract.'),{provider});};
+  for(const headers of [{},f.users.customer]){
+    const denied=await f.call(base+'/quote',{method:'POST',headers,body:{destination,parcel}});
+    assert.ok([401,403].includes(denied.status));assert.equal(denied.data.provider,undefined);
+  }
+  const result=await f.call(base+'/quote',{method:'POST',headers:f.users.shipping,body:{destination,parcel}});
+  assert.equal(result.status,422);assert.deepEqual(result.data.provider,provider);
+  assert.equal(result.headers['cache-control'],'no-store');assert.match(result.data.error,/Invalid contract/);
+  assert.equal(f.db.prepare('SELECT COUNT(*) n FROM europe_quotes').get().n,0);
+  assert.equal(f.db.prepare('SELECT COUNT(*) n FROM europe_shipments').get().n,0);assert.equal(f.counts.created,0);
+});
+
 test('HTTP europeo: simular no compra etiquetas, no descarga PDF y conserva existencias y saldo',async t=>{
   const f=fixture(t),headers={...f.users.shipping,'idempotency-key':randomUUID()};
   const quote=await f.call(base+'/quote',{method:'POST',headers,body:{destination,parcel}});
