@@ -5,6 +5,8 @@
   "compatibility_date": "2026-01-01",
   "compatibility_flags": ["nodejs_compat"],
   "workers_dev": true,
+  // Conserva las variables añadidas solo desde el panel entre despliegues.
+  "keep_vars": true,
   "assets": { "directory": "./public", "binding": "ASSETS", "run_worker_first": true },
   "alias": {
     "./db.mjs": "./cloudflare/database.mjs",

@@ -45,6 +45,8 @@ Introduce cada valor cuando lo solicite el terminal:
 
 La URL y el correo electrónico se guardan como secretos para que el siguiente despliegue no los sobrescriba. No pegues contraseñas en archivos ni commits. Antes de configurar los tres valores, el escaparate estático puede cargar, pero la API devuelve un error de disponibilidad.
 
+El proyecto también utiliza `keep_vars: true` en `wrangler.jsonc` para conservar las variables configuradas únicamente en el panel. Sin esta opción, un despliegue con Wrangler puede eliminar variables de texto que no figuren en el archivo. Los secretos se conservan independientemente de esta opción. Si `APP_URL` ya ha desaparecido, vuelve a añadirlo como **Secret** en **Settings → Variables and Secrets → Production** y pulsa **Deploy**; `keep_vars` no recupera valores eliminados. Para este dominio, su valor es `https://www.edgskateboards.com`, sin comillas, espacios ni rutas. Referencia: [Wrangler y la configuración del panel](https://developers.cloudflare.com/workers/wrangler/configuration/#source-of-truth).
+
 Abre la tienda. El primer acceso a la API crea el administrador. Inicia sesión con el correo electrónico y la contraseña y abre **Gestión** (o `/#admin`). Tras confirmar el inicio de sesión, puedes eliminar `ADMIN_PASSWORD` con `npx wrangler secret delete ADMIN_PASSWORD`: la cuenta ya está guardada de forma persistente. Cambiar ese secreto después no modifica la contraseña de una cuenta existente; utiliza «Mi cuenta» para cambiarla.
 
 ### Si la tienda no puede iniciarse
