@@ -4,10 +4,15 @@ Se preparan tres páginas HTML en español, accesibles sin JavaScript ni inicio 
 
 ## Completar antes de publicar
 
-Las páginas son **borradores**: incluyen una advertencia visible y `noindex`. La denominación EDG SKATEBOARDS S.L., el NIF B70987011 y el domicilio de Calle Tallers 52, P. 3, Pta. 2, 08001 Barcelona proceden de la factura aportada anteriormente. No se han inventado datos de contacto ni una dirección de recepción de paquetes.
+Las páginas conservan el estado de **borrador**, la advertencia visible y `noindex` por la revisión operativa que sigue pendiente. La denominación EDG SKATEBOARDS S.L. y el NIF B70987011 proceden de la factura aportada anteriormente. Los datos de contacto y devoluciones ya han sido facilitados por el titular:
 
-- Sustituir los campos «Pendiente de completar» por el correo oficial supervisado, el teléfono, los datos del Registro Mercantil y la dirección de devoluciones. El correo de privacidad puede ser el de atención al cliente si se atienden allí esas solicitudes.
-- Revisar la propuesta de costes: el cliente asume el transporte de una devolución ordinaria por desistimiento; EDG asume los costes necesarios cuando hay falta de conformidad o error de suministro. Acordar cómo se tramitan cambios de talla y recogidas.
+- Correo de atención, privacidad y devoluciones: `contato@edgskateboards.com`.
+- Teléfono: `+34 685 23 63 59`.
+- Dirección de notificaciones y devolución de paquetes: Calle Tallers 52, tercero segundo, 08001 Barcelona, Barcelona, España.
+- Registro Mercantil de Barcelona, tomo 49241, folio 36, sección 8, hoja B 612940, inscripción 1, de 17 de abril de 2024. El asiento de constitución y el domicilio se han contrastado con el BORME de 24 de abril de 2024, acto 195254, página 20737.
+- Decisión confirmada: el cliente paga únicamente los costes directos de transporte de una devolución por desistimiento; EDG asume los costes necesarios por productos incorrectos o faltas de conformidad.
+
+- Aplicar la política de costes confirmada e informar de ella antes de la compra. Coordinar los cambios de talla y las recogidas con atención al cliente, según disponibilidad.
 - Comprobar que precios, impuestos y plazos de entrega anunciados reflejan la operativa real. Confirmar los procedimientos de conservación y supresión, los proveedores activados y sus garantías para transferencias internacionales; el código no acredita contratos con proveedores ni aplica un calendario automático de borrado de cuentas y pedidos.
 - Tras completar y revisar el texto, retirar la advertencia de borrador, los marcadores pendientes y `noindex`, y actualizar la fecha/versionado. Conservar una copia de las condiciones aplicables a cada venta.
 
@@ -17,11 +22,12 @@ La aplicación muestra los pedidos en «Mis pedidos», pero no envía automátic
 
 La política describe la cookie de sesión `edg_session` (24 horas), la preferencia de idioma `edg.language` en almacenamiento local, los datos de cuenta/pedido y los proveedores que usa la tienda. Stripe recoge los datos de tarjeta en su página alojada; Sendcloud recibe los datos necesarios para tarifas y expedición; Resend se utiliza para recuperación de acceso cuando está configurado. Cloudflare aloja la aplicación. Las miniaturas de Skate se descargan de YouTube antes de reproducir; el reproductor se carga al pulsar. Cualquier analítica habilitada desde el alojamiento debe comprobarse aparte antes de cerrar el inventario de tratamientos.
 
-El domicilio societario sirve de referencia para comunicaciones escritas. No se ha supuesto que acepte paquetes de devolución. Las páginas no añaden servicios externos, rastreadores, cobros, contratación de transporte ni transmisión de datos personales.
+El titular ha confirmado el mismo domicilio para comunicaciones escritas y recepción de paquetes de devolución. Las páginas no añaden servicios externos, rastreadores, cobros, contratación de transporte ni transmisión de datos personales.
 
 ## Referencias consultadas el 25 de octubre de 2026
 
 - [AEPD: derecho de información](https://www.aepd.es/derechos-y-deberes/conoce-tus-derechos/derecho-de-informacion).
+- [BORME de 24 de abril de 2024: constitución e inscripción de EDG SKATEBOARDS S.L., acto 195254, página 20737](https://www.boe.es/borme/dias/2024/04/24/pdfs/BORME-A-2024-80-08.pdf#page=24).
 - [LSSI, art. 10: identificación del prestador](https://www.boe.es/buscar/act.php?id=BOE-A-2002-13758#a10).
 - [Ley de consumidores: contratación a distancia, desistimiento y conformidad](https://www.boe.es/buscar/act.php?id=BOE-A-2007-20555).
 - [Centro Europeo del Consumidor: devoluciones](https://portal-cec.consumo.gob.es/es/informacion-general/compras-online/devoluciones).
