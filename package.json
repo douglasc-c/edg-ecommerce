@@ -16,7 +16,8 @@
     "dev:cloudflare": "wrangler dev",
     "deploy": "wrangler deploy",
     "check:cloudflare": "wrangler deploy --dry-run",
-    "test:cloudflare": "node test/cloudflare-smoke.mjs"
+    "test:cloudflare": "node test/cloudflare-smoke.mjs",
+    "test:cloudflare:payments": "node test/cloudflare-isolation.mjs"
   },
   "devDependencies": {
     "@playwright/test": "1.64.0",

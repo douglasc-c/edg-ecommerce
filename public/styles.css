@@ -137,3 +137,23 @@ dialog.product-editor-dialog{max-width:1040px}dialog.product-detail-dialog{max-w
 .admin-shell,.admin-main,.sidebar,.admin-shell>div{min-width:0}.side-nav{max-width:100%}.admin-main .page-title{min-width:0;flex-wrap:wrap}.admin-main .page-title>div{min-width:0}.admin-main .table-wrap{max-width:100%}
 .product-editor-actions{bottom:0;padding-bottom:12px}.variant-scroll-hint{display:none}.variant-cell .variant-sku{font-size:10px;line-height:1.5;max-width:130px;text-align:left}.variant-low-stock-input{padding:8px 6px!important;font-size:10px!important;width:88px!important}.variant-price-details .field{font-size:10px}
 @media(max-width:650px){.product-editor-actions{bottom:0;padding-bottom:12px}.variant-scroll-hint{display:block;font-size:10px!important;color:var(--muted);margin:0 0 10px}}
+
+/* EUR checkout: bank instructions and payment selection. */
+.payment-test-banner{font-weight:700;border-bottom:1px solid #c9c9c9}
+.checkout-test-note{padding:14px 16px;margin:0 0 18px;border:1px solid #bdbdbd;border-left:4px solid #111;border-radius:8px;background:#f2f2f2;font-weight:650;line-height:1.6}
+.checkout-payment-methods{border:0;padding:0;margin:24px 0 0;min-width:0}
+.checkout-payment-methods legend{font-size:14px;font-weight:750;margin-bottom:5px;padding:0}
+.payment-choice{align-items:flex-start;cursor:pointer;min-height:64px}
+.payment-choice input{margin-top:4px;flex-shrink:0;accent-color:#111}
+.payment-choice>span{display:block;min-width:0}
+.payment-choice>span>strong{display:block;margin-left:0;font-size:12px}
+.payment-choice small{display:block;line-height:1.55;margin-top:5px;color:var(--muted)}
+.payment-choice:has(input:checked){border-color:#111;background:#fafafa}
+.bank-transfer-details{padding:20px;border:1px solid var(--line);border-radius:10px;background:#fafafa;margin:20px 0}
+.bank-transfer-details h3{margin-bottom:15px}
+.bank-transfer-details dl{margin:0;display:grid;gap:12px}
+.bank-transfer-details dl>div{display:grid;grid-template-columns:145px minmax(0,1fr);gap:12px;font-size:12px;line-height:1.5}
+.bank-transfer-details dt{color:var(--muted)}
+.bank-transfer-details dd{margin:0;min-width:0;overflow-wrap:anywhere;font-weight:650}
+.bank-transfer-details code{font-size:12px;user-select:all;letter-spacing:.2px}
+@media(max-width:520px){#checkout-form .form-grid{grid-template-columns:1fr}.bank-transfer-details{padding:16px}.bank-transfer-details dl>div{grid-template-columns:1fr;gap:3px}.checkout-payment-methods .shipping-choice{padding:12px}.detail-actions .btn{white-space:normal;text-align:center}}

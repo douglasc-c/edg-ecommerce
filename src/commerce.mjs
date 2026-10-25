@@ -4,7 +4,8 @@ import { productVariants } from './product-variants.mjs';
 import { transaction } from './db.mjs';
 import { coupons } from './coupons.mjs';
 import { photoIds } from './media.mjs';
-import { requireThat, HttpError, text, integer, positive, hash, now, address, safeLink, fiscalFields } from './security.mjs';
+import { spanishCheckoutAddress } from './europe-commerce.mjs';
+import { requireThat, HttpError, text, integer, positive, hash, now, address, safeLink, fiscalFields, permissions } from './security.mjs';
 export function commerce(db,config,provider) {
   const one=(sql,...args)=>db.prepare(sql).get(...args);
   const all=(sql,...args)=>db.prepare(sql).all(...args);
@@ -65,7 +66,7 @@ export function commerce(db,config,provider) {
   function order(id,user=null,manage=false) {
     const o=one('SELECT o.*,u.name customer_name,u.email customer_email FROM orders o JOIN users u ON u.id=o.user_id WHERE o.id=?',id);
     requireThat(o && (manage || !user || o.user_id===user.id),404,'Pedido no encontrado.');
-    return {...o,address:JSON.parse(o.address),shipping_service:JSON.parse(o.shipping_service),items:all('SELECT * FROM order_items WHERE order_id=?',id),events:all('SELECT * FROM order_events WHERE order_id=? ORDER BY id',id)};
+    return {...o,bank_transfer:o.bank_transfer_details?JSON.parse(o.bank_transfer_details):null,address:JSON.parse(o.address),shipping_service:JSON.parse(o.shipping_service),items:all('SELECT * FROM order_items WHERE order_id=?',id),events:all('SELECT * FROM order_events WHERE order_id=? ORDER BY id',id)};
   }
   function release(o,status,message) {
     for(const item of all('SELECT * FROM order_items WHERE order_id=?',o.id))updateBalance(item,0,-item.quantity);
@@ -96,8 +97,12 @@ export function commerce(db,config,provider) {
     return transaction(db,()=>{
       const o=one('SELECT * FROM orders WHERE id=?',String(payment.external_reference));
       requireThat(o,404,'Pedido no encontrado.');
-      requireThat(payment.currency_id==='BRL' && Math.round(Number(payment.transaction_amount)*100)===o.total,409,'El importe o la moneda del pago no coinciden.');
-      if(!provider.demo) requireThat(String(payment.collector_id)===String(config.collectorId),409,'El beneficiario del pago no coincide.');
+      requireThat(payment.currency_id===o.currency && Math.round(Number(payment.transaction_amount)*100)===o.total,409,'El importe o la moneda del pago no coinciden.');
+      if(o.currency==='EUR') {
+        requireThat(provider.european && payment.source===o.payment_method && payment.environment===o.payment_environment,409,'El método o entorno del pago no coincide.');
+        const used=one('SELECT order_id FROM ledger WHERE reference=?',`payment-${String(payment.id)}`);
+        requireThat(!used || used.order_id===o.id,409,'El ingreso ya está asociado a otro pedido.');
+      } else if(!provider.demo) requireThat(String(payment.collector_id)===String(config.collectorId),409,'El beneficiario del pago no coincide.');
       const pid=String(payment.id), paid=['approved','refunded','charged_back'].includes(payment.status);
       if(o.payment_id && o.payment_id!==pid) {
         if(paid) audit(null,'payment.duplicate',o.id,{payment_id:pid});
@@ -118,6 +123,7 @@ export function commerce(db,config,provider) {
         run("UPDATE orders SET status=?,payment_status='approved',payment_id=?,updated_at=? WHERE id=?",status,pid,now(),o.id);
         run("INSERT OR IGNORE INTO ledger(order_id,type,amount,description,reference,created_at) VALUES(?,'income',?,?,?,?)",o.id,o.total,`Venta #${o.number}`,`payment-${pid}`,now());
         event(o.id,status,status==='paid'?'Pago confirmado.':'Pago recibido sin existencias reservadas. Atención al cliente debe gestionar el reembolso.');
+        if(payment.source==='bank_transfer')audit(payment.actor_id,'payment.transfer_confirmed',o.id,{environment:o.payment_environment,amount:o.total,receipt_hash:hash(String(payment.bank_reference))});
       }
       // La consulta al proveedor permite recuperar una aprobación no registrada antes de un reembolso.
       if(['refunded','charged_back'].includes(payment.status) && o.payment_status==='pending') {
@@ -167,6 +173,40 @@ export function commerce(db,config,provider) {
   }
   return {
     audit, expire, applyPayment, applyTracking, order, coupons:discounts,
+    confirmTransfer(user,id,input) {
+      requireThat(permissions[user?.role]?.includes('finance'),403,'Tu perfil no puede confirmar transferencias.');
+      requireThat(input && input.confirmed===true,400,'Confirma que has comprobado el ingreso en la cuenta bancaria.');
+      const bankReference=text(input.bank_reference,'Referencia bancaria',3,100).toUpperCase();
+      requireThat(!/[\u0000-\u001f\u007f]/.test(bankReference),400,'Referencia bancaria no válida.');
+      const o=order(id,user,true);
+      requireThat(provider.european && o.currency==='EUR' && o.payment_method==='bank_transfer' && o.payment_environment===config.europeCheckout.environment,409,'El pedido no es una transferencia del entorno actual.');
+      requireThat(integer(input.amount,'Importe recibido',1)===o.total,409,'El importe recibido debe coincidir con el total del pedido.');
+      const paymentId=`bank-${hash(`${o.payment_environment}:${bankReference}`)}`;
+      requireThat(o.payment_status==='pending'||o.payment_status==='approved'&&o.payment_id===paymentId,409,'El pedido ya tiene otro ingreso confirmado.');
+      return applyPayment({id:paymentId,external_reference:o.id,currency_id:'EUR',transaction_amount:o.total/100,status:'approved',source:'bank_transfer',environment:o.payment_environment,actor_id:user.id,bank_reference:bankReference});
+    },
+    applyStripeSession(session) {
+      const id=session?.metadata?.order_id;
+      const o=typeof id==='string'?one('SELECT * FROM orders WHERE id=?',id):null;
+      if(!o)return null;
+      requireThat(provider.european && o.currency==='EUR' && o.payment_method==='stripe' && o.payment_environment===config.europeCheckout.environment,409,'El método o entorno del pedido no coincide.');
+      requireThat(session.id===o.preference_id && session.client_reference_id===o.id && session.currency==='eur' && Number.isSafeInteger(session.amount_total) && session.amount_total===o.total && session.livemode===(o.payment_environment==='live'),409,'La sesión Stripe no coincide con el pedido.');
+      if(session.payment_status!=='paid')return order(o.id);
+      requireThat(session.status==='complete' && typeof session.payment_intent==='string' && /^pi_[A-Za-z0-9_]+$/.test(session.payment_intent),409,'El pago Stripe no está confirmado.');
+      return applyPayment({id:session.payment_intent,external_reference:o.id,currency_id:'EUR',transaction_amount:o.total/100,status:'approved',source:'stripe',environment:o.payment_environment});
+    },
+    applyStripeRefund(charge,session=null) {
+      let o=typeof charge?.payment_intent==='string'?one('SELECT * FROM orders WHERE payment_id=?',charge.payment_intent):null;
+      if(!o && typeof charge?.metadata?.order_id==='string')o=one('SELECT * FROM orders WHERE id=?',charge.metadata.order_id);
+      if(!o)return null;
+      requireThat(provider.european && o.currency==='EUR' && o.payment_method==='stripe' && o.payment_environment===config.europeCheckout.environment,409,'El método o entorno del reembolso no coincide.');
+      requireThat(charge.currency==='eur' && charge.amount===o.total && charge.livemode===(o.payment_environment==='live') && Number.isSafeInteger(charge.amount_refunded) && charge.amount_refunded>=0 && charge.amount_refunded<=o.total && (!charge.metadata?.order_id||charge.metadata.order_id===o.id),409,'El reembolso Stripe no coincide con el pedido.');
+      if(!o.payment_id) {
+        requireThat(session,503,'El reembolso requiere conciliar primero la sesión Stripe.');
+        requireThat(session.id===o.preference_id && session.client_reference_id===o.id && session.metadata?.order_id===o.id && session.payment_intent===charge.payment_intent && session.currency==='eur' && session.amount_total===o.total && session.livemode===(o.payment_environment==='live') && session.status==='complete' && session.payment_status==='paid',409,'La sesión del reembolso no coincide con el pedido.');
+      }
+      return applyPayment({id:charge.payment_intent,external_reference:o.id,currency_id:'EUR',transaction_amount:o.total/100,transaction_amount_refunded:charge.amount_refunded/100,status:charge.amount_refunded===o.total?'refunded':'approved',source:'stripe',environment:o.payment_environment});
+    },
     products(admin=false) {return admin?all('SELECT *,stock-reserved available FROM products WHERE deleted_at IS NULL ORDER BY created_at DESC').map(adminProduct):all('SELECT * FROM products WHERE active=1 AND deleted_at IS NULL ORDER BY created_at DESC').map(publicProduct);},
     cart,
     setCart(user,id,quantity,variantId=null) {
@@ -189,27 +229,37 @@ export function commerce(db,config,provider) {
       return cart(user.id);
     },
     async quote(user,postalCode) {
-      expire(); const items=rawCart(user.id); validCart(items); const options=await provider.quote(items,postalCode);
+      const destination=provider.european?spanishCheckoutAddress(postalCode):postalCode;
+      const destinationKey=provider.european?hash(JSON.stringify(destination)):postalCode;
+      expire(); const items=rawCart(user.id); validCart(items); const options=await provider.quote(items,destination);
       const current=rawCart(user.id); validCart(current);
       requireThat(fingerprint(current)===fingerprint(items),409,'El carrito ha cambiado. Vuelve a calcular el envío.');
-      requireThat(options.length,422,'No hay envíos disponibles para este código postal brasileño (CEP).');
-      const id=randomUUID(); run('INSERT INTO quotes VALUES(?,?,?,?,?,?)',id,user.id,fingerprint(items),postalCode,JSON.stringify(options),new Date(Date.now()+10*60000).toISOString());
+      requireThat(options.length,422,provider.european?'No hay envíos disponibles para esta dirección.':'No hay envíos disponibles para este código postal brasileño (CEP).');
+      const id=randomUUID(); run('INSERT INTO quotes VALUES(?,?,?,?,?,?)',id,user.id,fingerprint(items),destinationKey,JSON.stringify(options),new Date(Date.now()+10*60000).toISOString());
       return {id,options,expires_in:600};
     },
     async checkout(user,input,key) {
-      text(key,'Clave de idempotencia',16,100); const a=address(input.address);
-      const requestHash=hash(JSON.stringify({quote_id:input.quote_id,service_id:input.service_id,address:a,coupon:input.coupon?String(input.coupon).trim().toUpperCase():null})); expire();
+      text(key,'Clave de idempotencia',16,100); const a=provider.european?spanishCheckoutAddress(input.address):address(input.address);
+      const paymentMethod=provider.european?(input.payment_method||'bank_transfer'):'mercadopago';
+      if(provider.european)requireThat(paymentMethod==='bank_transfer'||paymentMethod==='stripe'&&config.stripe?.enabled,400,'Método de pago no disponible.');
+      const requestHash=hash(JSON.stringify({quote_id:input.quote_id,service_id:input.service_id,address:a,coupon:input.coupon?String(input.coupon).trim().toUpperCase():null,...(provider.european?{payment_method:paymentMethod}:{})})); expire();
       let o=one('SELECT * FROM orders WHERE user_id=? AND idempotency_key=?',user.id,key);
       if(o) requireThat(o.request_hash===requestHash,409,'La clave ya se ha utilizado en otro checkout.');
       else o=transaction(db,()=>{
         const items=rawCart(user.id); validCart(items);
         const q=one('SELECT * FROM quotes WHERE id=? AND user_id=? AND expires_at>?',input.quote_id,user.id,now());
-        requireThat(q && q.fingerprint===fingerprint(items) && q.postal_code===a.postal_code,409,'La cotización ha caducado o el carrito ha cambiado. Vuelve a calcular el envío.');
+        requireThat(q && q.fingerprint===fingerprint(items) && q.postal_code===(provider.european?hash(JSON.stringify(a)):a.postal_code),409,'La cotización ha caducado o el carrito ha cambiado. Vuelve a calcular el envío.');
         const service=JSON.parse(q.options).find(s=>s.id===input.service_id); requireThat(service,400,'Envío no válido.');
         const subtotal=items.reduce((s,p)=>s+p.price*p.quantity,0); const coupon=discounts.calculate(user,subtotal,input.coupon); integer(subtotal-coupon.discount+service.price,'Total del pedido',1,100000000);
         const id=randomUUID(), time=now(), number=(one('SELECT MAX(number) n FROM orders').n||1000)+1;
-        const until=new Date(Date.now()+config.reservationMinutes*60000).toISOString();
+        const minutes=provider.european?(paymentMethod==='bank_transfer'?config.europeCheckout.transferHours*60:35):config.reservationMinutes;
+        const until=new Date(Date.now()+minutes*60000).toISOString();
         run("INSERT INTO orders(id,number,user_id,status,subtotal,shipping,total,address,shipping_service,idempotency_key,request_hash,reserved_until,created_at,updated_at) VALUES(?,?,?,'awaiting_payment',?,?,?,?,?,?,?,?,?,?)",id,number,user.id,subtotal,service.price,subtotal-coupon.discount+service.price,JSON.stringify(a),JSON.stringify(service),key,requestHash,until,time,time);
+        if(provider.european) {
+          const environment=config.europeCheckout.environment;
+          const bank=paymentMethod==='bank_transfer'?{...config.europeCheckout.bank,reference:`${environment==='test'?'TEST-':''}EDG-${number}`,due_at:until}:null;
+          run('UPDATE orders SET currency=?,payment_method=?,payment_environment=?,bank_transfer_details=? WHERE id=?','EUR',paymentMethod,environment,bank?JSON.stringify(bank):null,id);
+        }
         run('UPDATE orders SET discount=?,coupon_code=? WHERE id=?',coupon.discount,coupon.code,id);discounts.reserve(id,user.id,coupon.code);
         for(const p of items) {
           updateBalance(p,0,p.quantity);
@@ -222,6 +272,11 @@ export function commerce(db,config,provider) {
     },
     async paymentLink(user,id) {
       expire(); const o=order(id,user); requireThat(o.status==='awaiting_payment',409,'El pedido no está pendiente de pago.');
+      if(o.currency==='EUR') {
+        requireThat(provider.european && o.payment_environment===config.europeCheckout.environment,409,'Utiliza el entorno original del pedido.');
+        if(o.payment_method==='bank_transfer')return o;
+        requireThat(o.payment_method==='stripe' && config.stripe?.enabled,503,'El pago con tarjeta no está disponible.');
+      }
       if(!o.preference_id) await locked(`payment-${id}`,async()=>{
         const p=await provider.preference(o,o.items,user);
         run('UPDATE orders SET preference_id=?,payment_url=?,updated_at=? WHERE id=?',p.id,p.url,now(),id);
@@ -327,6 +382,14 @@ export function commerce(db,config,provider) {
     async refund(user,id) {
       return locked(`refund-${id}`,async()=>{
         const o=order(id,user,true); requireThat(o.payment_status==='approved',409,'El pago no está aprobado.');
+        if(o.currency==='EUR') {
+          requireThat(permissions[user?.role]?.includes('finance'),403,'Tu perfil no puede reembolsar pagos.');
+          requireThat(provider.european && o.payment_method==='stripe' && o.payment_environment===config.europeCheckout.environment,409,'Las transferencias deben devolverse y conciliarse desde el banco.');
+          const result=await provider.refund(o);audit(user.id,'payment.refund_requested',id,{environment:o.payment_environment});
+          requireThat(result.payment_intent===o.payment_id && result.currency==='eur' && result.amount===o.total-o.refunded,502,'El reembolso recibido no coincide con el pedido.');
+          if(result.status!=='succeeded')return order(id,user,true);
+          return applyPayment({id:o.payment_id,external_reference:o.id,currency_id:'EUR',transaction_amount:o.total/100,transaction_amount_refunded:o.total/100,status:'refunded',source:'stripe',environment:o.payment_environment});
+        }
         if(provider.demo) return applyPayment({id:o.payment_id,external_reference:id,currency_id:'BRL',transaction_amount:o.total/100,status:'refunded',transaction_amount_refunded:o.total/100});
         await provider.refund(o); audit(user.id,'payment.refund_requested',id); return applyPayment(await provider.payment(o.payment_id));
       });
@@ -334,6 +397,7 @@ export function commerce(db,config,provider) {
     async label(user,id,action,input={}) {
       return locked(`label-${id}`,async()=>{
         const o=order(id,user,true); requireThat(['paid','picking','ready'].includes(o.status) && o.payment_status==='approved' && !o.refunded,409,'No se puede generar una etiqueta para este pedido.');
+        requireThat(o.currency!=='EUR',409,'Prepara el envío europeo desde el módulo Sendcloud con las medidas del paquete embalado.');
         if(action==='create') {
           requireThat(!o.label_id,409,'El pedido ya tiene una etiqueta.');
           const issued=one('SELECT invoice_key,status,environment FROM invoices WHERE order_id=?',id);
