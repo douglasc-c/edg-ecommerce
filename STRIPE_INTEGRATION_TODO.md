@@ -55,7 +55,9 @@ La identidad visual y las políticas se gestionan en Stripe. La desactivación d
 
 Después de integrar el cambio en la rama publicada, abre **Workers & Pages → edg-ecommerce → Settings → Variables and Secrets**. Conserva las variables que ya funcionan y aplica los cambios mediante **Deploy**.
 
-[wrangler.jsonc](wrangler.jsonc) ya declara las opciones no sensibles de pruebas: `PAYMENT_ENVIRONMENT=test`, banco, beneficiario y plazo de reserva. Las claves Stripe y el IBAN se indican en comentarios para que los añadas como **Secret** en Cloudflare. `EUROPE_CHECKOUT_ENABLED` se configura como **Text** solo desde el panel; actívalo después de completar esos valores. `keep_vars=true` conserva las entradas añadidas exclusivamente al panel. Los valores que sí están declarados en `vars` deben cambiarse también en el archivo para que el siguiente despliegue no restaure el valor anterior.
+[wrangler.jsonc](wrangler.jsonc) declara ahora las opciones de producción: `PAYMENT_ENVIRONMENT=live`, `SENDCLOUD_ENVIRONMENT=live` y `EUROPE_CHECKOUT_ENABLED=true`, además del banco, beneficiario y plazo de reserva. Sigue [PRODUCTION.md](PRODUCTION.md) para coordinar el cambio con los secretos LIVE antes de publicar. `keep_vars=true` conserva las entradas añadidas exclusivamente al panel; los valores declarados en `vars` deben coincidir con los del panel para que el siguiente despliegue no restaure otro entorno.
+
+La tabla siguiente conserva la referencia para un Sandbox separado. No publiques `PAYMENT_ENVIRONMENT=test` en la tienda real ni sustituyas sus claves LIVE por las del Sandbox.
 
 | Variable | Valor para pruebas |
 | --- | --- |
@@ -140,7 +142,7 @@ Comprobaciones locales completadas: `npm run check`, `npm test` (242 pruebas, in
 
 ## Antes de activar pagos reales
 
-Completa las simulaciones anteriores, la activación de la cuenta Stripe, las políticas y el tratamiento de IVA. Después configura secretos y un webhook **de producción** y cambia `PAYMENT_ENVIRONMENT` a `live`. Ese cambio vuelve al almacén principal: no copia los pedidos de prueba. La contratación real de transporte se configura por separado en [SENDCLOUD.md](SENDCLOUD.md).
+Completa las simulaciones anteriores, la activación de la cuenta Stripe, las políticas y el tratamiento de IVA. Sigue el orden de [PRODUCTION.md](PRODUCTION.md) para cambiar las claves, el webhook y las variables en una sola publicación. `PAYMENT_ENVIRONMENT=live` vuelve al almacén principal: no copia los pedidos de prueba. `SENDCLOUD_ENVIRONMENT=live` permite contratar etiquetas únicamente tras la confirmación del administrador; el pago no contrata transporte automáticamente. Consulta [SENDCLOUD.md](SENDCLOUD.md).
 
 ## Referencias
 

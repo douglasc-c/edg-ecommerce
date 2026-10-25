@@ -2,6 +2,8 @@
 
 # EDG Commerce
 
+Para activar los pagos reales después de validar el Sandbox, sigue [Producción: Stripe y Sendcloud](PRODUCTION.md). El Wrangler publicado declara el checkout EUR en producción; las credenciales se completan exclusivamente en Cloudflare.
+
 Tienda online y panel de operaciones integrados: catálogo, carrito persistente, proceso de compra, pedidos, inventario, finanzas, expedición y usuarios con permisos por función. Interfaz en español, inglés y portugués de Brasil, adaptable a móviles, con área de cliente y área de gestión.
 
 La traducción de la interfaz no cambia las integraciones fiscales: el módulo actual emite **NF-e brasileñas mediante Focus NFe**. La facturación española sigue pendiente. El checkout EUR admite transferencia bancaria como opción principal y tarjeta Stripe opcional, mediante activación expresa; consulta [EUROPE_CHECKOUT.md](EUROPE_CHECKOUT.md). El módulo administrativo **Envíos europeos**, con Sendcloud, permite preparar envíos manuales desde Barcelona a España peninsular y Baleares; consulta [SENDCLOUD.md](SENDCLOUD.md) para configurarlo primero en modo de prueba local.
