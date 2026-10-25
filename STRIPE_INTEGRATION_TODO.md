@@ -52,6 +52,8 @@ La identidad visual y las políticas se gestionan en Stripe. La desactivación d
 
 Después de integrar el cambio en la rama publicada, abre **Workers & Pages → edg-ecommerce → Settings → Variables and Secrets**. Conserva las variables que ya funcionan y aplica los cambios mediante **Deploy**.
 
+[wrangler.jsonc](wrangler.jsonc) ya declara las opciones no sensibles de pruebas: `PAYMENT_ENVIRONMENT=test`, banco, beneficiario y plazo de reserva. Las claves Stripe y el IBAN se indican en comentarios para que los añadas como **Secret** en Cloudflare. `EUROPE_CHECKOUT_ENABLED` se configura como **Text** solo desde el panel; actívalo después de completar esos valores. `keep_vars=true` conserva las entradas añadidas exclusivamente al panel. Los valores que sí están declarados en `vars` deben cambiarse también en el archivo para que el siguiente despliegue no restaure el valor anterior.
+
 | Variable | Valor para pruebas |
 | --- | --- |
 | `APP_URL` | `https://www.edgskateboards.com` |
@@ -63,7 +65,8 @@ Después de integrar el cambio en la rama publicada, abre **Workers & Pages → 
 | `SENDCLOUD_ENVIRONMENT` | `test` |
 | `BANK_TRANSFER_BANK` | `Banco Sabadell` |
 | `BANK_TRANSFER_BENEFICIARY` | `EDG SKATEBOARDS S.L.` |
-| `BANK_TRANSFER_IBAN` | IBAN español completo de 24 caracteres, confirmado con el banco. No se incluye en este archivo. |
+| `BANK_TRANSFER_RESERVATION_HOURS` | `72`, ya declarado en `wrangler.jsonc`. |
+| `BANK_TRANSFER_IBAN` | **Secret**: IBAN español completo de 24 caracteres, confirmado con el banco. No se incluye en este archivo. |
 | `STRIPE_SECRET_KEY` | **Secret**: clave `sk_test_…` del Sandbox seleccionado, o clave restringida `rk_test_…` con los permisos necesarios. |
 | `STRIPE_WEBHOOK_SECRET` | **Secret**: firma `whsec_…` del endpoint descrito abajo, perteneciente al mismo Sandbox. |
 
