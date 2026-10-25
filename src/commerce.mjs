@@ -271,14 +271,34 @@ export function commerce(db,config,provider) {
       return this.paymentLink(user,o.id);
     },
     async paymentLink(user,id) {
-      expire(); const o=order(id,user); requireThat(o.status==='awaiting_payment',409,'El pedido no está pendiente de pago.');
+      const pending=()=>{
+        expire();const current=order(id,user);
+        requireThat(current.status!=='expired',409,'El plazo de pago ha vencido y se han liberado las existencias. Crea un nuevo pedido.');
+        requireThat(current.status==='awaiting_payment',409,'El pedido no está pendiente de pago.');
+        return current;
+      };
+      let o=pending();
       if(o.currency==='EUR') {
         requireThat(provider.european && o.payment_environment===config.europeCheckout.environment,409,'Utiliza el entorno original del pedido.');
         if(o.payment_method==='bank_transfer')return o;
         requireThat(o.payment_method==='stripe' && config.stripe?.enabled,503,'El pago con tarjeta no está disponible.');
       }
       if(!o.preference_id) await locked(`payment-${id}`,async()=>{
-        const p=await provider.preference(o,o.items,user);
+        let p;
+        try{p=await provider.preference(o,o.items,user);}
+        catch(error){
+          if(!error.checkoutReservationRejected||o.currency!=='EUR'||o.payment_method!=='stripe')throw error;
+          o=pending();
+          if(Date.parse(o.reserved_until)>Date.now()+31*60000)throw error;
+          // Renueva solo tras una validación rechazada. Los timeouts conservan clave y parámetros.
+          transaction(db,()=>{
+            const until=new Date(Date.now()+35*60000).toISOString();
+            run('UPDATE orders SET reserved_until=?,stripe_checkout_key=?,updated_at=? WHERE id=?',until,`preference-${randomUUID()}`,now(),id);
+            event(id,'awaiting_payment','Plazo de pago renovado para iniciar Stripe; se conserva la reserva de existencias.');
+          });
+          o=order(id,user);
+          p=await provider.preference(o,o.items,user);
+        }
         run('UPDATE orders SET preference_id=?,payment_url=?,updated_at=? WHERE id=?',p.id,p.url,now(),id);
       });
       return order(id,user);

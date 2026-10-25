@@ -23,12 +23,31 @@ async function mockEuroShop(page,{admin=false}={}){
     await route.fulfill({json:data});
   });
   await page.route('**/stripe-test',route=>route.fulfill({contentType:'text/html',body:'<h1>Stripe de prueba</h1>'}));
-  return requests;
+  return {...requests,order:()=>order};
 }
 
 async function fillSpanishAddress(page){
   for(const [name,value] of [['name','Cliente Prueba'],['phone','+34910000000'],['street','Calle Mayor'],['number','10'],['postal_code','28001'],['city','Madrid']])await page.locator(`#checkout-form [name=${name}]`).fill(value);
 }
+
+test('al vencer un pedido al pulsar pagar se actualizan el estado y las acciones sin recargar',async({page})=>{
+  const fixture=await mockEuroShop(page),order={...fixture.order(),payment_method:'stripe',bank_transfer:null};
+  const message='El plazo de pago ha vencido y se han liberado las existencias. Crea un nuevo pedido.';
+  let expired=false;
+  await page.route('**/api/orders**',async route=>{
+    if(new URL(route.request().url()).pathname.endsWith('/payment')){
+      expired=true;await route.fulfill({status:409,json:{error:message}});return;
+    }
+    const current={...order,status:expired?'expired':'awaiting_payment'};
+    await route.fulfill({json:new URL(route.request().url()).pathname==='/api/orders'?[current]:current});
+  });
+  await page.goto('/#orders');await page.getByRole('button',{name:'Ver pedido'}).click();
+  await page.getByRole('button',{name:'Pagar con tarjeta · Stripe'}).click();
+  await expect(page.locator('#dialog .badge')).toHaveText('Caducado');
+  await expect(page.getByRole('button',{name:'Pagar con tarjeta · Stripe'})).toHaveCount(0);
+  await expect(page.getByRole('button',{name:'Cancelar pedido'})).toHaveCount(0);
+  await expect(page.locator('#toast')).toHaveText(message);
+});
 
 test('checkout EUR: dirección española, transferencia principal y datos del pedido en móvil',async({page},testInfo)=>{
   const errors=[];page.on('pageerror',error=>errors.push(error.message));const requests=await mockEuroShop(page);

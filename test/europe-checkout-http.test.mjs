@@ -64,6 +64,18 @@ test('HTTP EUR: la configuración pública anuncia métodos y entorno sin datos 
   assert.equal((await f.call('/api/orders/'+order.id,{headers:f.auth.shipping})).status,404);
 });
 
+test('HTTP EUR: la clave interna de Stripe no se publica y el pago vencido explica cómo continuar',async t=>{
+  const f=fixture(t),order=await f.buy('stripe');
+  f.db.prepare('UPDATE orders SET reserved_until=?,stripe_checkout_key=? WHERE id=?')
+    .run('2000-01-01T00:00:00.000Z','preference-private-retry',order.id);
+  const response=await f.call('/api/orders/'+order.id+'/payment',{method:'POST',headers:f.auth.customer});
+  assert.equal(response.status,409);assert.match(response.data.error,/vencido.*nuevo pedido/i);
+  const updated=await f.call('/api/orders/'+order.id,{headers:f.auth.customer});
+  assert.equal(updated.data.status,'expired');assert.equal(updated.data.stripe_checkout_key,undefined);
+  assert.ok(!JSON.stringify(updated.data).includes('preference-private-retry'));
+  assert.equal(f.db.prepare('SELECT reserved FROM products WHERE id=?').get(f.p.id).reserved,0);
+});
+
 test('HTTP EUR: el checkout permanece cerrado mientras no se active expresamente',async t=>{
   const f=fixture(t,false),config=await f.call('/api/config');assert.equal(config.data.checkout_enabled,false);
   assert.deepEqual(config.data.payment_methods,[]);

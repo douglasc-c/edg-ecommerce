@@ -91,7 +91,7 @@ export function createApp({db=database(),config=configuration(),provider,mailer=
       const result=Object.fromEntries(Object.entries(data).map(([key,value])=>[key,sanitize(value)]));
       if(result.items && result.payment_status) {
         const viewer=session(req,false);
-        delete result.request_hash;delete result.idempotency_key;
+        delete result.request_hash;delete result.idempotency_key;delete result.stripe_checkout_key;
         if(!viewer || viewer.role==='customer') {
           for(const key of ['payment_id','preference_id','label_id','label_url','shipping_data']) delete result[key];
         }

@@ -36,7 +36,10 @@ export function stripeProvider(config,fetcher=fetch) {
       const requestId=response.headers.get('request-id');
       if(typeof requestId==='string' && /^req_[A-Za-z0-9]{1,200}$/.test(requestId))details.request_id=requestId;
       console.error('Stripe request rejected:',details);
-      throw failed('Stripe ha rechazado la solicitud. Revisa el estado de la integración.'+(details.request_id?` Referencia: ${details.request_id}.`:''),method!=='GET' && response.status>=500);
+      const rejection=failed('Stripe ha rechazado la solicitud. Revisa el estado de la integración.'+(details.request_id?` Referencia: ${details.request_id}.`:''),method!=='GET' && response.status>=500);
+      // Un error de validación de expires_at confirma que no se ha creado una sesión.
+      if(method==='POST'&&path==='/checkout/sessions'&&response.status===400&&details.type==='invalid_request_error'&&details.param==='expires_at')rejection.checkoutReservationRejected=true;
+      throw rejection;
     }
     try{return await response.json();}catch{throw failed('Respuesta JSON no válida de Stripe.',method!=='GET');}
   }
@@ -53,7 +56,9 @@ export function stripeProvider(config,fetcher=fetch) {
       const id=text(order?.id,'Pedido',1,100),total=integer(order.total,'Total del pedido',1,100000000);
       requireThat(!order.currency || String(order.currency).toUpperCase()==='EUR',400,'Stripe solo está habilitado para pedidos en EUR.');
       const expires=Math.floor(Date.parse(order.reserved_until)/1000),time=Math.floor(Date.now()/1000);
-      requireThat(Number.isSafeInteger(expires) && expires>=time+1800 && expires<=time+86400,409,'La reserva para Stripe debe estar vigente entre 30 minutos y 24 horas.');
+      // Repite primero la solicitud original: una respuesta perdida puede ocultar una sesión creada.
+      // Stripe valida los 30 minutos mínimos si la clave no tiene un resultado guardado.
+      requireThat(Number.isSafeInteger(expires) && expires>time && expires<=time+86400,409,'El plazo de pago ha vencido o la reserva Stripe no es válida.');
       const origin=new URL(config.url).origin;
       const body=new URLSearchParams({mode:'payment',ui_mode:'hosted_page','allowed_payment_method_types[0]':'card',
         billing_address_collection:'auto','phone_number_collection[enabled]':'false','automatic_tax[enabled]':'false',
@@ -65,7 +70,8 @@ export function stripeProvider(config,fetcher=fetch) {
         success_url:`${origin}/?payment=success#orders`,cancel_url:`${origin}/?payment=cancelled#orders`,
         expires_at:String(expires)});
       if(customer?.email)body.set('customer_email',text(customer.email,'Correo electrónico',3,254));
-      const result=session(await request('/checkout/sessions',{method:'POST',body,idempotencyKey:`preference-${id}`}));
+      const idempotencyKey=order.stripe_checkout_key?text(order.stripe_checkout_key,'Clave Stripe',1,255):`preference-${id}`;
+      const result=session(await request('/checkout/sessions',{method:'POST',body,idempotencyKey}));
       requireThat(result.amount_total===total && result.client_reference_id===id && result.metadata?.order_id===id,409,'La sesión Stripe no coincide con el pedido.');
       let url;try{url=new URL(result.url);}catch{throw failed('Stripe no ha devuelto una página de pago válida.');}
       requireThat(url.protocol==='https:' && url.hostname==='checkout.stripe.com' && !url.username && !url.password,502,'Stripe no ha devuelto una página de pago válida.');

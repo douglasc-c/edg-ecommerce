@@ -5,6 +5,8 @@ import { database } from '../src/db.mjs';
 import { commerce } from '../src/commerce.mjs';
 import { configuration } from '../src/server.mjs';
 import { europeCommerceProvider } from '../src/europe-commerce.mjs';
+import { stripeProvider as createStripeProvider } from '../src/stripe.mjs';
+import { migrate } from '../src/migrations.mjs';
 import { now } from '../src/security.mjs';
 
 // Public format example used only with fake providers and an in-memory database.
@@ -60,6 +62,110 @@ async function buy(f,{method='bank_transfer',quantity=1,target=address,key=rando
   return {order,input,key,quote};
 }
 const confirmation=(order,bank_reference='BANK-RECEIPT-001')=>({bank_reference,amount:order.total,confirmed:true});
+
+// Stripe replays executed requests before validating a new session's expiration.
+function stripeReplay(f,{loseResponse='before'}={}) {
+  const requests=[],sessions=new Map();
+  f.provider.preference=createStripeProvider(f.config,async(url,init)=>{
+    const body=new URLSearchParams(init.body),key=init.headers['Idempotency-Key'];
+    requests.push({body:init.body,key});
+    if(requests.length===1&&loseResponse==='before')throw new TypeError('Lost connection before creation');
+    const cached=sessions.get(key);
+    if(cached){assert.equal(init.body,cached.body);return Response.json(cached.session);}
+    if(Number(body.get('expires_at'))<Math.floor(Date.now()/1000)+1800)
+      return Response.json({error:{type:'invalid_request_error',param:'expires_at'}},{status:400});
+    const id=body.get('client_reference_id'),session={id:`cs_test_resume${sessions.size}`,object:'checkout.session',
+      livemode:false,currency:'eur',amount_total:Number(body.get('line_items[0][price_data][unit_amount]')),
+      client_reference_id:id,metadata:{order_id:id},status:'open',payment_status:'unpaid',payment_intent:null,
+      expires_at:Number(body.get('expires_at')),url:'https://checkout.stripe.com/c/pay/cs_test_resume'};
+    sessions.set(key,{body:init.body,session});
+    if(requests.length===1&&loseResponse==='after')throw new TypeError('Lost response after creation');
+    return Response.json(session);
+  }).preference;
+  return {requests,sessions};
+}
+
+test('Stripe permite retomar un pedido sin sesión después de cinco minutos sin duplicar reservas',async t=>{
+  t.mock.timers.enable({apis:['Date'],now:Date.now()});t.mock.method(console,'error',()=>{});
+  const f=fixture(t),remote=stripeReplay(f);
+  await assert.rejects(buy(f,{method:'stripe',quantity:2}),{status:502});
+  const pending=f.shop.listOrders(f.users.customer)[0],originalUntil=pending.reserved_until;
+  t.mock.timers.tick(6*60000);
+  const resumed=await f.shop.paymentLink(f.users.customer,pending.id);
+  assert.equal(resumed.id,pending.id);assert.equal(resumed.status,'awaiting_payment');
+  assert.ok(Date.parse(resumed.reserved_until)>Date.parse(originalUntil));
+  assert.equal(remote.sessions.size,1);assert.equal(remote.requests.length,3);
+  assert.equal(remote.requests[1].key,remote.requests[0].key);
+  assert.equal(remote.requests[1].body,remote.requests[0].body);
+  assert.notEqual(remote.requests[2].key,remote.requests[0].key);
+  assert.deepEqual({...stock(f)},{stock:10,reserved:2});assert.equal(balance(f),0);
+  assert.equal(f.shop.cart(f.users.customer.id).items.length,0);
+  await f.shop.paymentLink(f.users.customer,pending.id);assert.equal(remote.requests.length,3);
+});
+
+test('Stripe recupera una sesión creada antes del timeout conservando clave, parámetros y plazo',async t=>{
+  t.mock.timers.enable({apis:['Date'],now:Date.now()});t.mock.method(console,'error',()=>{});
+  const f=fixture(t),remote=stripeReplay(f,{loseResponse:'after'});
+  await assert.rejects(buy(f,{method:'stripe'}),{status:502});
+  const pending=f.shop.listOrders(f.users.customer)[0];t.mock.timers.tick(6*60000);
+  const resumed=await f.shop.paymentLink(f.users.customer,pending.id);
+  assert.equal(resumed.reserved_until,pending.reserved_until);
+  assert.equal(resumed.preference_id,[...remote.sessions.values()][0].session.id);
+  assert.equal(remote.requests.length,2);assert.deepEqual(remote.requests[0],remote.requests[1]);
+  assert.equal(remote.sessions.size,1);assert.deepEqual({...stock(f)},{stock:10,reserved:1});
+});
+
+test('un pedido Stripe vencido rechaza la reanudación con instrucciones y libera las existencias',async t=>{
+  t.mock.timers.enable({apis:['Date'],now:Date.now()});
+  const f=fixture(t),{order}=await buy(f,{method:'stripe'});
+  t.mock.timers.tick(36*60000);
+  await assert.rejects(f.shop.paymentLink(f.users.customer,order.id),error=>error.status===409&&/vencido.*nuevo pedido/i.test(error.message));
+  assert.equal(f.shop.order(order.id).status,'expired');assert.equal(f.calls.preference.length,1);
+  assert.deepEqual({...stock(f)},{stock:10,reserved:0});assert.equal(balance(f),0);
+});
+
+test('la clave renovada sobrevive a un timeout y a la reconstrucción del servicio',async t=>{
+  t.mock.timers.enable({apis:['Date'],now:Date.now()});t.mock.method(console,'error',()=>{});
+  const f=fixture(t),remote=stripeReplay(f),preference=f.provider.preference;
+  await assert.rejects(buy(f,{method:'stripe'}),{status:502});
+  const pending=f.shop.listOrders(f.users.customer)[0];t.mock.timers.tick(6*60000);
+  f.provider.preference=async(...args)=>{
+    const result=await preference(...args);
+    if(remote.requests.length===3)throw Object.assign(new Error('Lost renewal response'),{status:502,uncertain:true});
+    return result;
+  };
+  await assert.rejects(f.shop.paymentLink(f.users.customer,pending.id),{status:502});
+  const until=f.shop.order(pending.id).reserved_until;
+  t.mock.timers.tick(6*60000);
+  const restarted=commerce(f.db,f.config,f.provider),resumed=await restarted.paymentLink(f.users.customer,pending.id);
+  assert.equal(resumed.reserved_until,until);assert.equal(remote.requests.length,4);
+  assert.deepEqual(remote.requests[2],remote.requests[3]);assert.equal(remote.sessions.size,1);
+  assert.deepEqual({...stock(f)},{stock:10,reserved:1});assert.equal(balance(f),0);
+});
+
+test('no renueva un pedido que vence mientras Stripe rechaza la fecha de inicio',async t=>{
+  t.mock.timers.enable({apis:['Date'],now:Date.now()});t.mock.method(console,'error',()=>{});
+  const f=fixture(t),remote=stripeReplay(f),preference=f.provider.preference;
+  await assert.rejects(buy(f,{method:'stripe'}),{status:502});
+  const pending=f.shop.listOrders(f.users.customer)[0];t.mock.timers.tick(6*60000);
+  f.provider.preference=async(...args)=>{
+    try{return await preference(...args);}catch(error){if(error.checkoutReservationRejected)t.mock.timers.tick(30*60000);throw error;}
+  };
+  await assert.rejects(f.shop.paymentLink(f.users.customer,pending.id),error=>error.status===409&&/nuevo pedido/.test(error.message));
+  assert.equal(remote.requests.length,2);assert.equal(remote.sessions.size,0);
+  assert.equal(f.shop.order(pending.id).status,'expired');assert.deepEqual({...stock(f)},{stock:10,reserved:0});
+});
+
+test('la migración desde v9 conserva pedidos Stripe, sesiones y reservas y se aplica una sola vez',async t=>{
+  const f=fixture(t),{order}=await buy(f,{method:'stripe',quantity:2});
+  f.db.exec('ALTER TABLE orders DROP COLUMN stripe_checkout_key; DELETE FROM schema_version WHERE version=10;');
+  const before={...f.db.prepare('SELECT * FROM orders WHERE id=?').get(order.id)};
+  migrate(f.db);migrate(f.db);
+  const {stripe_checkout_key,...after}=f.db.prepare('SELECT * FROM orders WHERE id=?').get(order.id);
+  assert.equal(stripe_checkout_key,null);assert.deepEqual(after,before);
+  assert.equal(f.db.prepare('SELECT COUNT(*) n FROM schema_version WHERE version=10').get().n,1);
+  assert.deepEqual({...stock(f)},{stock:10,reserved:2});
+});
 
 test('la transferencia crea instrucciones exactas sin confirmar un crédito ni registrar ingresos',async t=>{
   const f=fixture(t,{stripe:false}),{order}=await buy(f,{quantity:2});

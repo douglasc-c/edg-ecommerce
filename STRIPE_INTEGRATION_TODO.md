@@ -123,6 +123,10 @@ Si no se obtiene una respuesta HTTP, el registro `Stripe request failed:` distin
 
 Tras desplegar una corrección, entra en **Mis pedidos** y retoma el pedido pendiente con **Pagar con tarjeta · Stripe** si la reserva sigue vigente. Si ya venció, crea un pedido nuevo. La confirmación real del pago sigue dependiendo del webhook.
 
+La reanudación repite primero la solicitud con su clave y parámetros originales, incluso cuando quedan menos de 30 minutos. Así recupera una sesión cuya respuesta pudo perderse. Solo si Stripe rechaza expresamente `expires_at` con una validación HTTP 400, y el pedido sigue pendiente y vigente, se renueva el plazo a 35 minutos y se guarda una nueva clave antes de solicitar la sesión. Un timeout conserva la clave y la fecha de esa tentativa; no provoca otro intento automático. Los pedidos vencidos liberan las existencias y requieren un pedido nuevo. Un conflicto al pagar actualiza el estado mostrado en la pantalla.
+
+La migración 10 añade únicamente la clave interna de reanudación a los pedidos existentes, con valor inicial nulo. Se aplica automáticamente al iniciar la tienda y conserva productos, pedidos y reservas.
+
 - Código actualizado: [src/stripe.mjs](src/stripe.mjs).
 - Archivo nuevo: este documento; no se añadieron otras rutas o servicios.
 - Configuración y webhook existentes: [src/server.mjs](src/server.mjs).
@@ -132,7 +136,7 @@ Tras desplegar una corrección, entra en **Mis pedidos** y retoma el pedido pend
 
 La comprobación automatizada local no reemplaza la compra real simulada en tu Sandbox, porque utiliza proveedores de prueba sin tus credenciales.
 
-Comprobaciones locales completadas: `npm run check`, `npm test` (234 pruebas, incluida la regresión del contrato Endive y los diagnósticos seguros), `npm run check:cloudflare` y `npm run test:cloudflare`. El aislamiento de pagos se validó también con `npm run test:cloudflare:payments` durante la integración inicial. Se contrastó la solicitud generada con los campos del prompt de Checkout Studio enviado, manteniendo el total y la referencia del pedido.
+Comprobaciones locales completadas: `npm run check`, `npm test` (242 pruebas, incluidas la reanudación tras cinco minutos, la respuesta perdida, la persistencia de la nueva clave y la migración conservativa), los cuatro casos de `test/browser/europe-checkout.spec.mjs`, `npm run check:cloudflare`, `npm run test:cloudflare` y `npm run test:cloudflare:payments`. Se contrastó la solicitud generada con los campos del prompt de Checkout Studio enviado, manteniendo el total y la referencia del pedido.
 
 ## Antes de activar pagos reales
 
@@ -141,6 +145,7 @@ Completa las simulaciones anteriores, la activación de la cuenta Stripe, las po
 ## Referencias
 
 - [API de Checkout Sessions](https://docs.stripe.com/api/checkout/sessions/create)
+- [Idempotencia y validación de solicitudes](https://docs.stripe.com/api/idempotent_requests)
 - [Cambio de métodos de pago en Endive](https://docs.stripe.com/changelog/endive/2026-09-30/remove-payment-method-types-checkout-sessions)
 - [Checkout Studio](https://docs.stripe.com/payments/checkout-studio/how-it-works)
 - [Catálogo externo y precios inline](https://docs.stripe.com/products-prices/how-products-and-prices-work)
