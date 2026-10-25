@@ -22,10 +22,20 @@ test('crea Checkout EUR con total del servidor, referencia, reserva e idempotenc
   assert.equal(url,'https://api.stripe.com/v1/checkout/sessions');assert.equal(init.method,'POST');assert.equal(init.redirect,'manual');
   assert.equal(init.headers.Authorization,'Bearer sk_test_fixture');assert.equal(init.headers['Idempotency-Key'],'preference-order-123');
   assert.equal(body.get('line_items[0][price_data][unit_amount]'),'1099');assert.equal(body.get('line_items[0][price_data][currency]'),'eur');
-  assert.equal(body.get('line_items[0][quantity]'),'1');assert.equal(body.get('payment_method_types[0]'),'card');
+  assert.equal(body.get('line_items[0][quantity]'),'1');assert.equal(body.get('allowed_payment_method_types[0]'),'card');
   assert.equal(body.get('client_reference_id'),order.id);assert.equal(body.get('metadata[order_id]'),order.id);assert.equal(body.get('payment_intent_data[metadata][order_id]'),order.id);
   assert.equal(body.get('customer_email'),'buyer@example.test');assert.equal(body.get('expires_at'),String(Math.floor(Date.parse(order.reserved_until)/1000)));
   assert.equal(body.get('success_url'),'https://store.example.test/?payment=success#orders');
+});
+
+test('crea Checkout con el contrato Endive, que rechaza payment_method_types',async()=>{
+  const api=stripeProvider(config,async(url,init)=>{
+    const body=new URLSearchParams(init.body);
+    if([...body.keys()].some(key=>/^payment_method_types(?:\[|$)/.test(key)))return json({error:{type:'invalid_request_error',code:'parameter_unknown',param:'payment_method_types'}},400);
+    if(body.get('allowed_payment_method_types[0]')!=='card')return json({error:{type:'invalid_request_error',code:'parameter_missing',param:'allowed_payment_method_types'}},400);
+    return json(session());
+  });
+  assert.equal((await api.preference(order,[],{})).id,'cs_test_fixture');
 });
 
 test('rechaza importe, moneda, reserva y claves de otro entorno antes de acceder a Stripe',async()=>{
@@ -50,11 +60,49 @@ test('consulta una sesión por ruta fija y rechaza identificadores o respuestas 
   for(const change of [{metadata:{}},{payment_status:'paid',payment_intent:null},{payment_intent:'pi_fixture/path'},{payment_status:'unknown'}])await assert.rejects(stripeProvider(config,async()=>json(session(change))).retrieveSession('cs_test_fixture'));
 });
 
-test('bloquea redirecciones y errores remotos sin divulgar cuerpos o credenciales',async()=>{
+test('bloquea redirecciones y errores remotos sin divulgar cuerpos o credenciales',async t=>{
+  t.mock.method(console,'error',()=>{});
   for(const response of [new Response(null,{status:307,headers:{Location:'https://other.example.test/private'}}),json({error:{message:'private sk_test_fixture'}},400),new Response('private invalid JSON',{status:200})]){
     await assert.rejects(stripeProvider(config,async()=>response).retrieveSession('cs_test_fixture'),error=>error.status===502 && !error.message.includes('private') && !error.message.includes('sk_test_fixture'));
   }
   await assert.rejects(stripeProvider(config,async()=>{throw Error('private transport');}).preference(order,[],{}),error=>error.status===502&&error.uncertain===true&&!error.message.includes('private'));
+});
+
+test('registra el rechazo Stripe con parámetro y referencia seguros, sin exponer el mensaje remoto',async t=>{
+  const logs=[];t.mock.method(console,'error',(...args)=>logs.push(args));
+  const response=new Response(JSON.stringify({error:{type:'invalid_request_error',code:'parameter_unknown',param:'integration_identifier',
+    message:'private sk_test_fixture buyer@example.test',request_log_url:'https://example.test/private'}}),
+    {status:400,headers:{'content-type':'application/json','request-id':'req_fixture'}});
+  await assert.rejects(stripeProvider(config,async()=>response).preference(order,[],{email:'buyer@example.test'}),error=>{
+    assert.equal(error.status,502);assert.equal(error.uncertain,false);assert.match(error.message,/req_fixture/);
+    assert.ok(!error.message.includes('private'));assert.ok(!error.message.includes('buyer@example.test'));assert.ok(!error.message.includes('sk_test_fixture'));
+    return true;
+  });
+  assert.deepEqual(logs,[['Stripe request rejected:',{status:400,type:'invalid_request_error',code:'parameter_unknown',param:'integration_identifier',request_id:'req_fixture'}]]);
+});
+
+test('omite diagnósticos no fiables y conserva la incertidumbre de escrituras sin reintentar',async t=>{
+  const logs=[];t.mock.method(console,'error',(...args)=>logs.push(args));
+  for(const status of [400,401,403,429,500]){
+    let calls=0;
+    const data={error:{type:'private',code:'sk_test_fixture',param:'private buyer@example.test',message:'private sk_test_fixture'}};
+    await assert.rejects(stripeProvider(config,async()=>{calls++;return new Response(JSON.stringify(data),{status,headers:{'request-id':'req_private?secret=sk_test_fixture'}});}).preference(order,[],{}),error=>{
+      assert.equal(error.uncertain,status>=500);assert.equal(error.status,502);assert.ok(!error.message.includes('private'));assert.ok(!error.message.includes('sk_test_fixture'));return true;
+    });
+    assert.equal(calls,1);assert.deepEqual(logs.at(-1),['Stripe request rejected:',{status}]);
+  }
+  await assert.rejects(stripeProvider(config,async()=>new Response('private sk_test_fixture',{status:502})).preference(order,[],{}),error=>error.uncertain===true);
+  assert.deepEqual(logs.at(-1),['Stripe request rejected:',{status:502}]);
+});
+
+test('distingue timeout y fallo de red sin registrar excepciones ni repetir la creación',async t=>{
+  const logs=[];t.mock.method(console,'error',(...args)=>logs.push(args));
+  for(const name of ['TimeoutError','AbortError','Error']){
+    let calls=0;
+    await assert.rejects(stripeProvider(config,async()=>{calls++;throw Object.assign(new Error('private sk_test_fixture'),{name});}).preference(order,[],{}),error=>error.status===502&&error.uncertain===true&&!error.message.includes('private'));
+    assert.equal(calls,1);
+    assert.deepEqual(logs.at(-1),['Stripe request failed:',{kind:name==='Error'?'network_error':'timeout',method:'POST'}]);
+  }
 });
 
 test('verifica Stripe-Signature sobre bytes originales y acepta varias firmas v1',()=>{
