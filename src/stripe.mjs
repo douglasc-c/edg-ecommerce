@@ -20,9 +20,24 @@ export function stripeProvider(config,fetcher=fetch) {
     if(idempotencyKey)headers['Idempotency-Key']=idempotencyKey;
     let response;
     try{response=await fetcher(BASE+path,{method,headers,redirect:'manual',signal:AbortSignal.timeout(15000),...(body?{body:body.toString()}:{})});}
-    catch{throw failed('No se ha podido confirmar la respuesta de Stripe.',method!=='GET');}
+    catch(error){
+      console.error('Stripe request failed:',{kind:['TimeoutError','AbortError'].includes(error?.name)?'timeout':'network_error',method});
+      throw failed('No se ha podido confirmar la respuesta de Stripe.',method!=='GET');
+    }
     if(response.status>=300 && response.status<400)throw failed('Stripe ha devuelto una redirección inesperada.',method!=='GET');
-    if(!response.ok)throw failed('Stripe ha rechazado la solicitud. Revisa el estado de la integración.',method!=='GET' && response.status>=500);
+    if(!response.ok){
+      let data;try{data=await response.json();}catch{}
+      const error=object(data?.error)?data.error:{},details={status:response.status};
+      // Solo metadatos técnicos validados: nunca el cuerpo, mensaje, claves o datos del cliente.
+      if(['api_error','authentication_error','card_error','idempotency_error','invalid_request_error','permission_error','rate_limit_error'].includes(error.type))details.type=error.type;
+      if(typeof error.code==='string' && /^[a-z][a-z0-9_]{0,79}$/.test(error.code) && !/^(?:(?:sk|rk|pk)_(?:test|live)_|whsec_)/.test(error.code))details.code=error.code;
+      const parameters=new Set(body?[...body.keys()].flatMap(key=>[key,key.split('[')[0]]):[]);
+      if(typeof error.param==='string' && parameters.has(error.param))details.param=error.param;
+      const requestId=response.headers.get('request-id');
+      if(typeof requestId==='string' && /^req_[A-Za-z0-9]{1,200}$/.test(requestId))details.request_id=requestId;
+      console.error('Stripe request rejected:',details);
+      throw failed('Stripe ha rechazado la solicitud. Revisa el estado de la integración.'+(details.request_id?` Referencia: ${details.request_id}.`:''),method!=='GET' && response.status>=500);
+    }
     try{return await response.json();}catch{throw failed('Respuesta JSON no válida de Stripe.',method!=='GET');}
   }
   function session(value){
@@ -40,7 +55,7 @@ export function stripeProvider(config,fetcher=fetch) {
       const expires=Math.floor(Date.parse(order.reserved_until)/1000),time=Math.floor(Date.now()/1000);
       requireThat(Number.isSafeInteger(expires) && expires>=time+1800 && expires<=time+86400,409,'La reserva para Stripe debe estar vigente entre 30 minutos y 24 horas.');
       const origin=new URL(config.url).origin;
-      const body=new URLSearchParams({mode:'payment',ui_mode:'hosted_page','payment_method_types[0]':'card',
+      const body=new URLSearchParams({mode:'payment',ui_mode:'hosted_page','allowed_payment_method_types[0]':'card',
         billing_address_collection:'auto','phone_number_collection[enabled]':'false','automatic_tax[enabled]':'false',
         allow_promotion_codes:'false',submit_type:'auto',integration_identifier:'hosted_web_0001',origin_context:'web',
         client_reference_id:id,'metadata[order_id]':id,'payment_intent_data[metadata][order_id]':id,

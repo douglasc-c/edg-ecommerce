@@ -39,12 +39,15 @@ Los valores que deben aportarse son secretos y configuración del entorno, no su
 | `submit_type` | `auto` |
 | `integration_identifier` | `hosted_web_0001` |
 | `origin_context` | `web` |
+| `allowed_payment_method_types[0]` | `card` |
 
 `payment_method_collection` se omite porque Stripe solo permite configurarlo con `mode=subscription`; EDG utiliza `mode=payment`.
 
 Se conservan los parámetros operativos existentes aunque el prompt genérico del panel no los enumere: `client_reference_id`, los metadatos `order_id` de sesión y PaymentIntent, `expires_at`, `customer_email` y la limitación a tarjeta. Quitarlos impediría la conciliación con el pedido o cambiaría los métodos y el plazo de pago acordados. También se conserva la clave de idempotencia de cada pedido.
 
 La tienda usa REST con `fetch`, sin SDK Stripe instalado. Por eso no se añade ni se elige una versión de SDK. `hosted_page` es el valor de la API actual y del Checkout Studio enviado; no se establece una cabecera `Stripe-Version` ni se cambia la versión de la cuenta. Hay que validar la creación real de una sesión en el Sandbox: una cuenta con versión API anterior debe revisar la compatibilidad de estos campos antes de actualizar su versión.
+
+La creación de Checkout usa `allowed_payment_method_types` para limitar los métodos elegibles a tarjeta en la API `2026-09-30.endive` o compatible. Esa versión eliminó el parámetro de entrada `payment_method_types`: enviarlo devuelve HTTP 400. Se conserva el valor del pedido, los metadatos y la idempotencia; no se reintenta automáticamente cambiando parámetros ni se modifica la versión de la cuenta.
 
 La identidad visual y las políticas se gestionan en Stripe. La desactivación de Adaptive Pricing se confirma en los ajustes del mismo Sandbox. Antes de pagos reales, queda por definir el cálculo del IVA y completar las políticas de la tienda.
 
@@ -114,6 +117,12 @@ El checkout EUR con `PAYMENT_ENVIRONMENT=test` utiliza el almacén aislado `prim
 
 ## Estructura y comprobaciones
 
+Si la tienda devuelve 502 al iniciar el pago, revisa **Cloudflare → edg-ecommerce → Logs → Live** y busca `Stripe request rejected:`. El registro contiene solo estado HTTP, tipo/código admitidos, nombre de un parámetro enviado y `request_id`, cuando Stripe proporciona esos datos. El mensaje y cuerpo remotos, los encabezados de autorización y los datos del cliente no se registran. La referencia `req_…` también se incluye en la respuesta pública para localizar la solicitud en **Stripe → Workbench → Logs**.
+
+Si no se obtiene una respuesta HTTP, el registro `Stripe request failed:` distingue `timeout` de `network_error`, sin registrar el mensaje de la excepción. El timeout sigue siendo de 15 segundos y las escrituras con resultado incierto no se repiten automáticamente.
+
+Tras desplegar una corrección, entra en **Mis pedidos** y retoma el pedido pendiente con **Pagar con tarjeta · Stripe** si la reserva sigue vigente. Si ya venció, crea un pedido nuevo. La confirmación real del pago sigue dependiendo del webhook.
+
 - Código actualizado: [src/stripe.mjs](src/stripe.mjs).
 - Archivo nuevo: este documento; no se añadieron otras rutas o servicios.
 - Configuración y webhook existentes: [src/server.mjs](src/server.mjs).
@@ -123,7 +132,7 @@ El checkout EUR con `PAYMENT_ENVIRONMENT=test` utiliza el almacén aislado `prim
 
 La comprobación automatizada local no reemplaza la compra real simulada en tu Sandbox, porque utiliza proveedores de prueba sin tus credenciales.
 
-Comprobaciones locales completadas: `npm run check`, `npm test` (230 pruebas), `npm run check:cloudflare`, `npm run test:cloudflare` y `npm run test:cloudflare:payments`. También se contrastó la solicitud generada con los campos del prompt de Checkout Studio enviado, manteniendo el total y la referencia del pedido.
+Comprobaciones locales completadas: `npm run check`, `npm test` (234 pruebas, incluida la regresión del contrato Endive y los diagnósticos seguros), `npm run check:cloudflare` y `npm run test:cloudflare`. El aislamiento de pagos se validó también con `npm run test:cloudflare:payments` durante la integración inicial. Se contrastó la solicitud generada con los campos del prompt de Checkout Studio enviado, manteniendo el total y la referencia del pedido.
 
 ## Antes de activar pagos reales
 
@@ -132,6 +141,7 @@ Completa las simulaciones anteriores, la activación de la cuenta Stripe, las po
 ## Referencias
 
 - [API de Checkout Sessions](https://docs.stripe.com/api/checkout/sessions/create)
+- [Cambio de métodos de pago en Endive](https://docs.stripe.com/changelog/endive/2026-09-30/remove-payment-method-types-checkout-sessions)
 - [Checkout Studio](https://docs.stripe.com/payments/checkout-studio/how-it-works)
 - [Catálogo externo y precios inline](https://docs.stripe.com/products-prices/how-products-and-prices-work)
 - [Webhooks](https://docs.stripe.com/webhooks)
