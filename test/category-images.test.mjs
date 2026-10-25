@@ -157,7 +157,7 @@ for(const existingCategories of [false,true]) {
     if(existingCategories)db.exec("INSERT INTO categories VALUES('Sin productos');");
     initialize(db);
     initialize(db);
-    assert.equal(db.prepare('SELECT MAX(version) version FROM schema_version').get().version,9);
+    assert.equal(db.prepare('SELECT MAX(version) version FROM schema_version').get().version,10);
     const shop=commerce(db,config,providers(config)),legacy=shop.categories().find(row=>row.name==='Heredada');
     assert.equal(legacy.image_id,null);
     assert.equal(legacy.image,null);

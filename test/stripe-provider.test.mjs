@@ -40,8 +40,20 @@ test('crea Checkout con el contrato Endive, que rechaza payment_method_types',as
 
 test('rechaza importe, moneda, reserva y claves de otro entorno antes de acceder a Stripe',async()=>{
   const api=stripeProvider(config,()=>assert.fail('No debe llamar a la red.'));
-  for(const change of [{total:0},{total:10.5},{currency:'BRL'},{reserved_until:new Date(Date.now()+60000).toISOString()},{reserved_until:new Date(Date.now()+90000000).toISOString()}])await assert.rejects(api.preference({...order,...change},[],{}));
+  for(const change of [{total:0},{total:10.5},{currency:'BRL'},{reserved_until:new Date(Date.now()-60000).toISOString()},{reserved_until:new Date(Date.now()+90000000).toISOString()}])await assert.rejects(api.preference({...order,...change},[],{}));
   for(const secretKey of [undefined,'sk_live_fixture','pk_test_fixture'])await assert.rejects(stripeProvider({...config,stripe:{...config.stripe,secretKey}},()=>assert.fail('No debe llamar a la red.')).retrieveSession('cs_test_fixture'),{status:503});
+});
+
+test('solo una validación rechazada de expires_at permite renovar la solicitud de Checkout',async t=>{
+  t.mock.method(console,'error',()=>{});
+  for(const [status,type,param,renew] of [[400,'invalid_request_error','expires_at',true],
+    [500,'invalid_request_error','expires_at',false],[400,'authentication_error','expires_at',false],
+    [400,'invalid_request_error','customer_email',false],[409,'idempotency_error','expires_at',false]]){
+    let calls=0;
+    const api=stripeProvider(config,async()=>{calls++;return json({error:{type,param}},status);});
+    await assert.rejects(api.preference(order,[],{}),error=>Boolean(error.checkoutReservationRejected)===renew);
+    assert.equal(calls,1);
+  }
 });
 
 test('solo devuelve páginas alojadas por Stripe y sesiones que coincidan con el pedido',async()=>{

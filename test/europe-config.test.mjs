@@ -164,5 +164,5 @@ test('la migración conserva pedidos anteriores como BRL y se puede repetir',t=>
   const order=db.prepare('SELECT * FROM orders').get();
   assert.equal(order.total,1100);assert.equal(order.currency,'BRL');assert.equal(order.payment_method,'mercadopago');
   assert.equal(order.payment_environment,'live');assert.equal(order.bank_transfer_details,null);
-  assert.equal(db.prepare('SELECT MAX(version) v FROM schema_version').get().v,9);
+  assert.equal(db.prepare('SELECT MAX(version) v FROM schema_version').get().v,10);
 });

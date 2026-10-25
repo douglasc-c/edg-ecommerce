@@ -346,7 +346,7 @@ for(const useTransactionSync of [false,true]){
       assert.equal(rows.length,before[table].length);
       assert.deepEqual(rows.map(row=>Object.fromEntries(Object.keys(before[table][0]).map(key=>[key,row[key]]))),before[table],table);
     }
-    assert.equal(sql.prepare('SELECT MAX(version) version FROM schema_version').get().version,9);
+    assert.equal(sql.prepare('SELECT MAX(version) version FROM schema_version').get().version,10);
     assert.equal(sql.prepare('SELECT COUNT(*) n FROM schema_version WHERE version=8').get().n,1);
     assert.equal(sql.prepare('SELECT variants_enabled FROM products').get().variants_enabled,0);
     assert.equal(sql.prepare('SELECT COUNT(*) n FROM product_variants').get().n,0);

@@ -234,7 +234,7 @@ test('la migración v4 conserva productos, reservas e imágenes y se puede repet
   db.prepare('INSERT INTO categories VALUES(?,?)').run('Heredada',imageId);
   migrate(db);
   migrate(db);
-  assert.equal(db.prepare('SELECT MAX(version) version FROM schema_version').get().version,9);
+  assert.equal(db.prepare('SELECT MAX(version) version FROM schema_version').get().version,10);
   assert.deepEqual({...db.prepare('SELECT id,name,category,stock,reserved,size,deleted_at,sizes FROM products').get()},
     {id:'legacy',name:'Producto heredado',category:'Heredada',stock:10,reserved:2,size:'',deleted_at:null,sizes:'[]'});
   assert.equal(db.prepare('SELECT image_id FROM categories').get().image_id,imageId);

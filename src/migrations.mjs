@@ -174,6 +174,16 @@ function migrateV9(db) {
   try{apply();db.exec('COMMIT');}catch(error){db.exec('ROLLBACK');throw error;}
 }
 
+function migrateV10(db) {
+  const apply=()=>{
+    if(db.prepare('SELECT MAX(version) v FROM schema_version').get().v>=10)return;
+    db.exec('ALTER TABLE orders ADD COLUMN stripe_checkout_key TEXT; INSERT INTO schema_version VALUES(10);');
+  };
+  if(db.transactionSync)return db.transactionSync(apply);
+  db.exec('BEGIN IMMEDIATE');
+  try{apply();db.exec('COMMIT');}catch(error){db.exec('ROLLBACK');throw error;}
+}
+
 export function migrate(db) {
   migrateV2(db);
   migrateV3(db);
@@ -183,4 +193,5 @@ export function migrate(db) {
   migrateV7(db);
   migrateV8(db);
   migrateV9(db);
+  migrateV10(db);
 }

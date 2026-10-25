@@ -645,7 +645,10 @@ document.addEventListener('click',async e=>{const el=e.target.closest('[data-act
   if(action==='admin-order')orderDialog(state.adminOrders.find(o=>o.id===id)||await api('/admin/orders').then(rows=>rows.find(o=>o.id===id)),true);
   if(action==='confirm-transfer')transferConfirmationDialog(state.currentOrder.order);
   if(action==='demo-pay')await afterOrderAction(await api(`/orders/${id}/demo-pay`,{method:'POST'}),false);
-  if(action==='pay'){const o=await api(`/orders/${id}/payment`,{method:'POST'});if(o.payment_url)location.assign(o.payment_url);}
+  if(action==='pay'){
+    try{const o=await api(`/orders/${id}/payment`,{method:'POST'});if(o.payment_url)location.assign(o.payment_url);}
+    catch(error){if(error.status===409){const o=await api(`/orders/${id}`);await render();orderDialog(o);}throw error;}
+  }
   if(action==='cancel-order'){const o=await api(`/orders/${id}/cancel`,{method:'POST'});await afterOrderAction(o,false);}
   if(action==='admin-cancel')await afterOrderAction(await api(`/admin/orders/${id}/cancel`,{method:'POST'}),true);
   if(action==='next-status'){if(el.dataset.status==='shipped')dialog('Registrar envío',`<form id="shipping-form" data-id="${id}">${field('tracking_code','Código de seguimiento','','text','required minlength="3"')}${field('tracking_url','Enlace de seguimiento (opcional)','','url')}<div class="form-actions"><button class="btn primary">Confirmar envío</button></div></form>`);else await afterOrderAction(await api(`/admin/orders/${id}/status`,{method:'POST',body:{status:el.dataset.status}}),true);}

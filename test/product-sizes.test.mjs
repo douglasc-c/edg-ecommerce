@@ -222,7 +222,7 @@ for(const transactionSync of [false,true]) {
     const after=sql.prepare('SELECT * FROM products ORDER BY id').all();
     assert.deepEqual(after.map(product=>Object.fromEntries(Object.keys(before[0]).map(key=>[key,product[key]]))),before.map(product=>({...product})));
     for(const product of after)assert.deepEqual(JSON.parse(product.sizes),product.size?[product.size]:[]);
-    assert.equal(sql.prepare('SELECT MAX(version) v FROM schema_version').get().v,9);
+    assert.equal(sql.prepare('SELECT MAX(version) v FROM schema_version').get().v,10);
     assert.equal(sql.prepare('SELECT COUNT(*) n FROM schema_version WHERE version=7').get().n,1);
     sql.prepare('UPDATE products SET sizes=? WHERE id=?').run('["S","M"]','legacy');
     migrate(db);
