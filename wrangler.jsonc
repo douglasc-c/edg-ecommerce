@@ -21,8 +21,19 @@
     "STORE_NAME": "EDG Commerce",
     "STORE_CURRENCY": "EUR",
     "SHIPPING_PROVIDER": "sendcloud",
-    "SENDCLOUD_ENVIRONMENT": "test"
+    "SENDCLOUD_ENVIRONMENT": "test",
+    "PAYMENT_ENVIRONMENT": "test",
+    "BANK_TRANSFER_BANK": "Banco Sabadell",
+    "BANK_TRANSFER_BENEFICIARY": "EDG SKATEBOARDS S.L.",
+    "BANK_TRANSFER_RESERVATION_HOURS": "72"
   },
+  // Activación desde Cloudflare: EUROPE_CHECKOUT_ENABLED=true (tipo Text),
+  // después de completar el IBAN y las credenciales del Sandbox.
+  // Se mantiene solo en el panel para conservar su estado con keep_vars.
+  // Secretos del checkout EUR (añadir como Secret; no poner sus valores en vars):
+  // STRIPE_SECRET_KEY: clave sk_test_... o rk_test_... del Sandbox.
+  // STRIPE_WEBHOOK_SECRET: firma whsec_... del endpoint /api/webhooks/stripe.
+  // BANK_TRANSFER_IBAN: IBAN español completo de 24 caracteres, verificado con el banco.
   // Secretos del Worker (panel de Cloudflare o `npx wrangler secret put NOMBRE`):
   // ADMIN_EMAIL, ADMIN_PASSWORD, SENDCLOUD_PUBLIC_KEY, SENDCLOUD_SECRET_KEY,
   // SENDCLOUD_SENDER_ADDRESS_ID. Sus valores no se incluyen en este archivo.

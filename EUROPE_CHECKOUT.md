@@ -19,7 +19,9 @@ El catálogo publicado sigue cerrado para compras hasta activar expresamente `EU
 
 El IBAN español debe contener 24 caracteres y superar la validación de control. El número parcial compartido en la conversación no se incluye en el repositorio. El checkout no se activa con una cuenta incompleta. La validación de formato no comprueba la titularidad: utiliza la cuenta confirmada por el banco.
 
-En Cloudflare, añade las credenciales en **Workers & Pages → edg-ecommerce → Settings → Variables and Secrets** y aplica con **Deploy**. Guarda las claves Stripe como secretos. No se necesita una clave publicable para esta redirección a la página de pago alojada por Stripe. Las variables nuevas no se declaran en `wrangler.jsonc`, para conservar la publicación en modo catálogo hasta completar la configuración; `keep_vars` conserva las variables añadidas solo en el panel.
+En Cloudflare, añade las credenciales en **Workers & Pages → edg-ecommerce → Settings → Variables and Secrets** y aplica con **Deploy**. Guarda `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET` y `BANK_TRANSFER_IBAN` como **Secret**. No se necesita una clave publicable para esta redirección a la página de pago alojada por Stripe.
+
+`wrangler.jsonc` declara `PAYMENT_ENVIRONMENT=test`, el nombre del banco, el beneficiario y las 72 horas de reserva. La activación `EUROPE_CHECKOUT_ENABLED` se configura como **Text** solo desde el panel, después de completar las credenciales y el IBAN: no se añade un valor vacío ni se activa automáticamente al desplegar. `keep_vars=true` conserva las variables configuradas únicamente en el panel. Para cambiar de forma permanente una variable que sí figura en `vars`, actualiza también `wrangler.jsonc`: un despliegue posterior aplica el valor del archivo.
 
 Las credenciales de Sendcloud siguen siendo necesarias para consultar tarifas. `SENDCLOUD_ENVIRONMENT` es independiente de `PAYMENT_ENVIRONMENT`: mantén `SENDCLOUD_ENVIRONMENT=test` durante las pruebas de pagos.
 

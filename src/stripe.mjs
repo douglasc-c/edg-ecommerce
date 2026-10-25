@@ -40,7 +40,9 @@ export function stripeProvider(config,fetcher=fetch) {
       const expires=Math.floor(Date.parse(order.reserved_until)/1000),time=Math.floor(Date.now()/1000);
       requireThat(Number.isSafeInteger(expires) && expires>=time+1800 && expires<=time+86400,409,'La reserva para Stripe debe estar vigente entre 30 minutos y 24 horas.');
       const origin=new URL(config.url).origin;
-      const body=new URLSearchParams({mode:'payment','payment_method_types[0]':'card',
+      const body=new URLSearchParams({mode:'payment',ui_mode:'hosted_page','payment_method_types[0]':'card',
+        billing_address_collection:'auto','phone_number_collection[enabled]':'false','automatic_tax[enabled]':'false',
+        allow_promotion_codes:'false',submit_type:'auto',integration_identifier:'hosted_web_0001',origin_context:'web',
         client_reference_id:id,'metadata[order_id]':id,'payment_intent_data[metadata][order_id]':id,
         'line_items[0][quantity]':'1','line_items[0][price_data][currency]':'eur',
         'line_items[0][price_data][unit_amount]':String(total),
