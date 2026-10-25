@@ -957,6 +957,12 @@ window.EDGCommonMessages = (() => {
     ["EDG Commerce · Tienda y gestión", "EDG Commerce · Store and management", "EDG Commerce · Loja e gestão"],
     ["MÚSICA · Historia y discos · EDG", "MUSIC · History and albums · EDG", "MÚSICA · História e discos · EDG"],
     ["SKATE · Historia y vídeos · EDG Skateboards", "SKATE · History and videos · EDG Skateboards", "SKATE · História e vídeos · EDG Skateboards"],
+    ["Política de privacidad", "Privacy policy", "Política de privacidade"],
+    ["Términos de uso y compra", "Terms of use and purchase", "Termos de uso e compra"],
+    ["Política de devoluciones", "Returns policy", "Política de devoluções"],
+    ["Información legal", "Legal information", "Informações legais"],
+    ["Los enlaces legales se abren en otra pestaña.", "Legal links open in a new tab.", "Os links legais abrem em outra aba."],
+    ["EDG SKATEBOARDS S.L. trata tus datos para gestionar tu cuenta y tus pedidos (ejecución del contrato), cumplir obligaciones legales y proteger la tienda (interés legítimo). Sus proveedores de alojamiento, pago, envío y correo pueden tratar datos fuera del Espacio Económico Europeo. Consulta cómo ejercer tus derechos y la información completa en la política de privacidad.", "EDG SKATEBOARDS S.L. processes your data to manage your account and orders (performance of the contract), comply with legal obligations and protect the store (legitimate interest). Its hosting, payment, shipping and email providers may process data outside the European Economic Area. See the privacy policy for full information and how to exercise your rights.", "A EDG SKATEBOARDS S.L. trata seus dados para gerenciar sua conta e seus pedidos (execução do contrato), cumprir obrigações legais e proteger a loja (interesse legítimo). Seus fornecedores de hospedagem, pagamento, envio e e-mail podem tratar dados fora do Espaço Econômico Europeu. Consulte a política de privacidade para saber como exercer seus direitos e obter as informações completas."],
   ];
   return {
     en: Object.fromEntries(messages.map(([source, en]) => [source, en])),
