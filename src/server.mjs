@@ -284,6 +284,11 @@ export function createApp({db=database(),config=configuration(),provider,mailer=
       requireThat(req.method==='GET' || req.method==='HEAD',405,'Método no permitido.');
       if(/^\/media\/[a-f0-9]{64}\.jpg$/.test(url.pathname)){const id=url.pathname.slice(7,-4),photo=db.prepare('SELECT data FROM media WHERE id=?').get(id);requireThat(photo,404,'Foto no encontrada.');res.writeHead(200,{'Content-Type':'image/jpeg','Cache-Control':'public, max-age=31536000, immutable'});return res.end(req.method==='HEAD'?undefined:Buffer.from(photo.data));}
       const files={'/':'index.html','/edg-hero-emblem.png':'edg-hero-emblem.png','/edg-hero-emblem-black.png':'edg-hero-emblem-black.png','/app.js':'app.js','/styles.css':'styles.css','/favicon.svg':'favicon.svg','/edg-logo.png':'edg-logo.png','/edg-footer-logo.png':'edg-footer-logo.png','/edg-universe-background.webp':'edg-universe-background.webp','/edg-skate-campaign-960.webp':'edg-skate-campaign-960.webp','/edg-skate-campaign-1600.webp':'edg-skate-campaign-1600.webp'};
+      // Standalone legal pages remain readable without the store JavaScript.
+      files['/legal.css']='legal.css';
+      for(const page of ['privacidad','terminos','devoluciones']){
+        for(const path of [`/${page}`,`/${page}/`,`/${page}/index.html`])files[path]=`${page}/index.html`;
+      }
       files['/loading.css']='loading.css';
       files['/skate.css']='skate.css';
       files['/skate.js']='skate.js';

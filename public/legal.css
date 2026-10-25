@@ -1,0 +1,58 @@
+:root{color-scheme:light;--ink:#111;--paper:#fff;--muted:#555;--line:#dedede;--soft:#f4f4f4}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth;scroll-padding-top:24px}
+body{margin:0;background:var(--paper);color:var(--ink);font-family:Arial,Helvetica,sans-serif;font-size:16px;line-height:1.7;-webkit-font-smoothing:antialiased}
+a{color:inherit;text-underline-offset:4px;text-decoration-thickness:1px}
+a:hover{text-decoration-thickness:2px}
+a:focus-visible,main:focus-visible{outline:3px solid currentColor;outline-offset:5px}
+.skip-link{position:absolute;left:20px;top:-100px;z-index:5;padding:10px 16px;background:#fff;color:#000;font-weight:700}
+.skip-link:focus{top:16px}
+.legal-header{background:#000;color:#fff}
+.legal-header-inner{max-width:1280px;margin:auto;padding:12px 40px;display:flex;align-items:center;justify-content:space-between;gap:24px}
+.legal-brand{display:inline-flex;align-items:center;gap:12px;text-decoration:none;font-size:10px;line-height:1.4;letter-spacing:1.5px;font-weight:700}
+.legal-brand img{display:block;width:100px;height:58px;object-fit:contain;filter:invert(1)}
+.legal-store-link{font-size:12px;font-weight:700;letter-spacing:1px;text-transform:uppercase;white-space:nowrap}
+.legal-page{max-width:1280px;margin:0 auto;padding:0 40px 80px}
+.legal-tabs{display:flex;flex-wrap:wrap;gap:8px 28px;padding:24px 0;border-bottom:1px solid var(--line);font-size:13px}
+.legal-tabs a{text-decoration:none;padding:4px 0;border-bottom:2px solid transparent}
+.legal-tabs a[aria-current="page"]{border-bottom-color:var(--ink);font-weight:700}
+.legal-draft{margin:28px 0 0;padding:14px 18px;border:1px solid #aaa;background:var(--soft);font-size:13px;line-height:1.6}
+.legal-intro{padding:48px 0 44px;border-bottom:1px solid var(--line)}
+.legal-eyebrow{margin:0 0 18px;font-size:11px;line-height:1.5;letter-spacing:2px;text-transform:uppercase;font-weight:700}
+h1{max-width:1000px;margin:0;font-size:clamp(38px,6.8vw,80px);font-weight:800;letter-spacing:-.055em;line-height:1.04;overflow-wrap:break-word}
+.legal-lead{max-width:65ch;margin:24px 0 0;color:var(--muted);font-size:18px;line-height:1.65}
+.legal-version{margin:20px 0 0;font-size:12px;color:var(--muted)}
+.legal-layout{display:grid;grid-template-columns:minmax(180px,240px) minmax(0,1fr);gap:clamp(40px,7vw,100px);align-items:start;padding-top:40px}
+.legal-index{position:sticky;top:24px;font-size:13px}
+.legal-index p{margin:0 0 16px;font-size:10px;font-weight:700;letter-spacing:1.6px;text-transform:uppercase}
+.legal-index ol{list-style:none;padding:0;margin:0;counter-reset:section}
+.legal-index li{counter-increment:section;margin:0;border-top:1px solid var(--line)}
+.legal-index a{display:grid;grid-template-columns:24px 1fr;gap:8px;padding:12px 0;text-decoration:none;line-height:1.5}
+.legal-index a::before{content:counter(section,decimal-leading-zero);font-size:11px;color:var(--muted);padding-top:1px}
+.legal-index a:hover span{text-decoration:underline;text-underline-offset:4px}
+.legal-article{max-width:75ch;min-width:0}
+.legal-section{padding:0 0 32px;margin:0 0 32px;border-bottom:1px solid var(--line);scroll-margin-top:24px}
+.legal-section:last-child{margin-bottom:0}
+h2{margin:0 0 18px;font-size:25px;line-height:1.25;letter-spacing:-.025em}
+h3{margin:24px 0 10px;font-size:17px;line-height:1.4}
+p{margin:0 0 16px}
+ul,ol{padding-left:22px;margin:16px 0}
+li{margin:8px 0}
+address{font-style:normal}
+.legal-facts{display:grid;grid-template-columns:160px minmax(0,1fr);margin:20px 0;font-size:15px}
+.legal-facts dt,.legal-facts dd{margin:0;padding:10px 0;border-top:1px solid var(--line)}
+.legal-facts dt{font-weight:700;padding-right:16px}
+.legal-pending{display:inline;color:#444;font-weight:700;background:#eee;padding:2px 5px;box-decoration-break:clone;-webkit-box-decoration-break:clone}
+.legal-note{padding:16px 18px;background:var(--soft);font-size:14px;line-height:1.65}
+.legal-source{margin:20px 0 0;font-size:12px;line-height:1.65;color:var(--muted)}
+.legal-model{margin:20px 0;padding:22px;border:1px solid #aaa;overflow-wrap:anywhere}
+.legal-model p:last-child{margin-bottom:0}
+.legal-model ul{list-style:none;padding:0}
+.legal-footer{background:#000;color:#fff}
+.legal-footer-inner{max-width:1280px;padding:30px 40px;margin:auto;display:flex;align-items:flex-start;justify-content:space-between;gap:24px;font-size:12px;line-height:1.7}
+.legal-footer-inner p{margin:0}
+.legal-footer nav{display:flex;flex-wrap:wrap;gap:10px 22px}
+@media(max-width:800px){.legal-header-inner{padding:10px 24px}.legal-page{padding:0 24px 56px}.legal-intro{padding:36px 0}.legal-layout{grid-template-columns:1fr;gap:32px;padding-top:28px}.legal-index{position:static}.legal-index ol{display:grid;grid-template-columns:1fr 1fr;column-gap:24px}.legal-lead{font-size:17px}.legal-footer-inner{padding:28px 24px;flex-direction:column}}
+@media(max-width:480px){.legal-header-inner{padding:8px 20px;gap:12px}.legal-brand{gap:6px}.legal-brand img{width:76px;height:48px}.legal-brand span{font-size:8px;letter-spacing:1px;max-width:80px}.legal-store-link{font-size:10px;white-space:normal;text-align:right}.legal-page{padding-inline:20px}.legal-tabs{gap:8px 20px;font-size:12px;padding:20px 0}.legal-draft{padding:12px 14px}.legal-index ol{grid-template-columns:1fr}.legal-facts{display:block}.legal-facts dt{padding:12px 0 0}.legal-facts dd{border:0;padding:4px 0 12px}.legal-model{padding:18px}.legal-footer-inner{padding-inline:20px}h2{font-size:23px}}
+@media(prefers-reduced-motion:reduce){html{scroll-behavior:auto}}
+@media print{body{font-size:11pt;line-height:1.5}.skip-link,.legal-index,.legal-tabs,.legal-store-link,.legal-footer{display:none}.legal-header{background:#fff;color:#000}.legal-header-inner{padding:0 0 20px}.legal-brand img{filter:none}.legal-page{padding:0;max-width:none}.legal-intro{padding:24px 0}.legal-layout{display:block;padding-top:24px}.legal-article{max-width:none}h1{font-size:32pt}h2{font-size:18pt;break-after:avoid}.legal-section{break-inside:auto}.legal-model{break-inside:avoid}.legal-pending{background:#eee}a{text-decoration:underline}.legal-draft{border:1px solid #000}.legal-source{font-size:9pt}}
