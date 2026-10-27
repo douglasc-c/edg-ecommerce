@@ -56,6 +56,11 @@ function bindStoreHeader(){
   if(!header)return ()=>{};
   const logo=header.querySelector('.store-header-brand'),home=header.querySelector('.toplinks a[href="#store"]'),main=header.nextElementSibling;
   const controller=new AbortController(),options={signal:controller.signal};
+  const account=header.querySelector('.account-nav'),accountToggle=account?.querySelector('[data-account-toggle]'),accountMenu=account?.querySelector('.account-menu');
+  const setAccountOpen=open=>{
+    accountMenu.hidden=!open;accountToggle.setAttribute('aria-expanded',String(open));
+    if(open){setHidden(false);resetDirection();}
+  };
   // Safari can report positions outside the document during elastic scrolling.
   const scrollPosition=()=>Math.max(0,Math.min(window.scrollY,Math.max(0,document.documentElement.scrollHeight-document.documentElement.clientHeight)));
   const hasKeyboardFocus=()=>!!header.querySelector(':focus-visible');
@@ -77,7 +82,7 @@ function bindStoreHeader(){
       logo.setAttribute('aria-hidden',String(!scrolled));
     }
     // Keep the header in place until content can fill the space behind it.
-    if(position<=hideAfter||hasKeyboardFocus()){setHidden(false);direction=travel=0;return;}
+    if(position<=hideAfter||hasKeyboardFocus()||accountMenu&&!accountMenu.hidden){setHidden(false);direction=travel=0;return;}
     if(!delta)return;
     const nextDirection=Math.sign(delta);
     if(nextDirection!==direction){direction=nextDirection;travel=0;}
@@ -92,6 +97,16 @@ function bindStoreHeader(){
   };
   const resync=()=>{measure();resetDirection();schedule();};
   measure();update();
+  if(accountMenu){
+    accountToggle.addEventListener('click',()=>setAccountOpen(accountMenu.hidden),options);
+    document.addEventListener('click',event=>{
+      if(!accountMenu.hidden&&(!account.contains(event.target)||event.target.closest('.account-menu a,.account-menu button')))setAccountOpen(false);
+    },options);
+    document.addEventListener('keydown',event=>{
+      if(event.key==='Escape'&&!accountMenu.hidden){event.preventDefault();setAccountOpen(false);accountToggle.focus({preventScroll:true});}
+    },options);
+    account.addEventListener('focusout',event=>{if(!account.contains(event.relatedTarget))setAccountOpen(false);},options);
+  }
   const observer=new ResizeObserver(measure);
   observer.observe(header);
   window.addEventListener('scroll',schedule,{passive:true,signal:controller.signal});
@@ -319,10 +334,22 @@ function legalLinks(newTab=false){
 function legalFormNotice(){
   return `<aside class="form-legal"><p>EDG SKATEBOARDS S.L. trata tus datos para gestionar tu cuenta y tus pedidos (ejecución del contrato), cumplir obligaciones legales y proteger la tienda (interés legítimo). Sus proveedores de alojamiento, pago, envío y correo pueden tratar datos fuera del Espacio Económico Europeo. Consulta cómo ejercer tus derechos y la información completa en la política de privacidad.</p><nav aria-label="Información legal">${legalLinks(true)}</nav><p>Los enlaces legales se abren en otra pestaña.</p></aside>`;
 }
+function storeAccountControl(){
+  const icon='<svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><circle cx="12" cy="8" r="4"/><path d="M4 21v-2a8 8 0 0 1 16 0v2"/></svg>';
+  if(!state.user)return `<button class="account-toggle" type="button" data-action="login" aria-label="Iniciar sesión" title="Iniciar sesión">${icon}</button>`;
+  return `<div class="account-nav"><button class="account-toggle" type="button" data-account-toggle aria-label="Mi cuenta" title="Mi cuenta" aria-controls="account-menu" aria-expanded="false">${icon}</button><nav id="account-menu" class="account-menu" aria-label="Mi cuenta" hidden><a href="#orders">Mis pedidos</a><button type="button" data-action="password">Contraseña</button><button type="button" data-action="logout">Cerrar sesión</button></nav></div>`;
+}
 function storeShell(content) {
   const count=state.cart.items.reduce((s,p)=>s+p.quantity,0);
   const scrolled=isStoreHeaderScrolled();
-  return `${demoBanner()}<header class="topbar store-header${scrolled?' is-scrolled':''}${scrolled&&storeHeaderHidden?' is-scroll-hidden':''}"><div class="store-header-brand"${scrolled?'':' inert aria-hidden="true"'}>${brand()}</div><button type="button" class="store-menu-open" data-action="open-store-menu" aria-label="Abrir menú" aria-controls="store-menu" aria-expanded="false"><span aria-hidden="true">☰</span><span class="store-menu-open-label">Menú</span></button><nav class="toplinks"><a href="#store">Inicio</a><a href="#catalog">Colección</a><a href="#skate"${location.hash==='#skate'?' aria-current="page"':''}>Skate</a><a href="#musica"${location.hash==='#musica'?' aria-current="page"':''}>Música</a><a href="#orders">Mis pedidos</a>${has('dashboard')?'<a href="#admin">Gestión</a>':''}</nav><div class="topactions">${state.user?`<button class="btn small" data-action="account">${literal(state.user.name.split(' ')[0])} · <span>Mi cuenta</span></button>`:'<button class="btn small" data-action="login">Iniciar sesión</button>'}<a class="btn small" href="#cart">Carrito <span class="cart-count">${count}</span></a>${i18n.selector()}</div></header><main class="store-main">${skateStoreMenu()}${content}<footer class="footer"><span>© ${new Date().getFullYear()} EDG</span><nav aria-label="Enlaces del pie de página"><a href="#catalog">Colección</a><a href="#skate">Skate</a><a href="#musica">Música</a><a href="#orders">Mis pedidos</a><a href="#cart">Carrito</a></nav><nav class="footer-legal" aria-label="Información legal">${legalLinks()}</nav><a class="footer-brand" href="#store"><img class="sr-only" src="/edg-footer-logo.png" alt="EDG" width="1122" height="125" loading="lazy" decoding="async"></a></footer></main>`;
+  return `${demoBanner()}
+    <header class="topbar store-header${scrolled?' is-scrolled':''}${scrolled&&storeHeaderHidden?' is-scroll-hidden':''}">
+      <div class="store-header-brand"${scrolled?'':' inert aria-hidden="true"'}>${brand()}</div>
+      <button type="button" class="store-menu-open" data-action="open-store-menu" aria-label="Abrir menú" aria-controls="store-menu" aria-expanded="false"><span aria-hidden="true">☰</span><span class="store-menu-open-label">Menú</span></button>
+      <nav class="toplinks"><a href="#store">Inicio</a><a href="#catalog">Colección</a><a href="#skate"${location.hash==='#skate'?' aria-current="page"':''}>Skate</a><a href="#musica"${location.hash==='#musica'?' aria-current="page"':''}>Música</a>${has('dashboard')?'<a href="#admin">Gestión</a>':''}</nav>
+      <div class="topactions"><a class="btn small" href="#cart">Carrito <span class="cart-count">${count}</span></a>${i18n.selector()}${storeAccountControl()}</div>
+    </header>
+    <main class="store-main">${skateStoreMenu()}${content}<footer class="footer"><span>© ${new Date().getFullYear()} EDG</span><nav aria-label="Enlaces del pie de página"><a href="#catalog">Colección</a><a href="#skate">Skate</a><a href="#musica">Música</a>${state.user?'<a href="#orders">Mis pedidos</a>':''}<a href="#cart">Carrito</a></nav><nav class="footer-legal" aria-label="Información legal">${legalLinks()}</nav><a class="footer-brand" href="#store"><img class="sr-only" src="/edg-footer-logo.png" alt="EDG" width="1122" height="125" loading="lazy" decoding="async"></a></footer></main>`;
 }
 const activeVariants=p=>(p.variants||[]).filter(v=>v.active!==false&&v.active!==0);
 const legacyNeedsAllocation=p=>!p.variants_enabled&&productSizeValues(p).length>1;
