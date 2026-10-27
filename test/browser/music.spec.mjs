@@ -119,16 +119,15 @@ test('los capítulos no reconstruyen el reproductor y las portadas mantienen su 
     const viewport=await page.evaluate(()=>({width:innerWidth,scrollWidth:document.documentElement.scrollWidth}));
     expect(viewport.scrollWidth,`La página no debe desbordar a ${viewport.width}px`).toBeLessThanOrEqual(viewport.width);
     if(width===320){
-      const headerLinks=page.locator('.store-header .toplinks a');
-      const lastHeaderLink=headerLinks.last();
-      await headerLinks.first().focus();
-      for(let index=1;index<await headerLinks.count();index++)await page.keyboard.press('Tab');
-      await expect(lastHeaderLink).toBeFocused();
-      await expect.poll(()=>lastHeaderLink.evaluate(node=>{
-        const rect=node.getBoundingClientRect(),nav=node.parentElement;
-        if(rect.left>=-1&&rect.right<=innerWidth+1)return 'visible';
-        return JSON.stringify({left:rect.left,right:rect.right,scrollLeft:nav.scrollLeft,clientWidth:nav.clientWidth,scrollWidth:nav.scrollWidth,activeElement:document.activeElement?.textContent});
-      })).toBe('visible');
+      await expect(page.locator('.store-header .toplinks')).toBeHidden();
+      const open=page.getByRole('button',{name:'Abrir menú',exact:true});
+      await open.focus();
+      await page.keyboard.press('Enter');
+      const music=page.locator('#store-menu').getByRole('link',{name:'MÚSICA',exact:true});
+      await music.focus();
+      await expect(music).toBeInViewport({ratio:1});
+      await page.keyboard.press('Escape');
+      await expect(open).toBeFocused();
     }
   }
   await page.locator('.music-page .skate-section-nav [data-section="historia"]').click();

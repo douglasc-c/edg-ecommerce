@@ -81,7 +81,8 @@ test('el menú lateral identifica SKATE, cierra con Escape y permite volver a la
   await drawer.getByRole('link',{name:'Inicio',exact:true}).click();
   await expect(page).toHaveURL(/#store$/);
   await expect(drawer).not.toBeVisible();
-  await page.locator('.store-header .toplinks').getByRole('link',{name:'Skate',exact:true}).click();
+  await open.click();
+  await drawer.getByRole('link',{name:'SKATE',exact:true}).click();
   await expect(page).toHaveURL(/#skate$/);
   await expect(page.locator('.skate-page h1')).toHaveText('SKATE');
 });
