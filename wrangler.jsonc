@@ -21,18 +21,19 @@
     "STORE_NAME": "EDG Commerce",
     "STORE_CURRENCY": "EUR",
     "SHIPPING_PROVIDER": "sendcloud",
-    "SENDCLOUD_ENVIRONMENT": "test",
-    "PAYMENT_ENVIRONMENT": "test",
+    "SENDCLOUD_ENVIRONMENT": "live",
+    "EUROPE_CHECKOUT_ENABLED": "true",
+    "PAYMENT_ENVIRONMENT": "live",
     "BANK_TRANSFER_BANK": "Banco Sabadell",
     "BANK_TRANSFER_BENEFICIARY": "EDG SKATEBOARDS S.L.",
     "BANK_TRANSFER_RESERVATION_HOURS": "72"
   },
-  // Activación desde Cloudflare: EUROPE_CHECKOUT_ENABLED=true (tipo Text),
-  // después de completar el IBAN y las credenciales del Sandbox.
-  // Se mantiene solo en el panel para conservar su estado con keep_vars.
+  // Producción EUR: conserva COMMERCE_MODE=catalog; live es el flujo brasileño.
+  // Antes de publicar este archivo, configura las claves LIVE y las variables
+  // de entorno en una sola edición de Cloudflare. Consulta PRODUCTION.md.
   // Secretos del checkout EUR (añadir como Secret; no poner sus valores en vars):
-  // STRIPE_SECRET_KEY: clave sk_test_... o rk_test_... del Sandbox.
-  // STRIPE_WEBHOOK_SECRET: firma whsec_... del endpoint /api/webhooks/stripe.
+  // STRIPE_SECRET_KEY: clave sk_live_... o rk_live_... de producción.
+  // STRIPE_WEBHOOK_SECRET: firma whsec_... del endpoint LIVE /api/webhooks/stripe.
   // BANK_TRANSFER_IBAN: IBAN español completo de 24 caracteres, verificado con el banco.
   // Secretos del Worker (panel de Cloudflare o `npx wrangler secret put NOMBRE`):
   // ADMIN_EMAIL, ADMIN_PASSWORD, SENDCLOUD_PUBLIC_KEY, SENDCLOUD_SECRET_KEY,
