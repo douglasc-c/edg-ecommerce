@@ -106,7 +106,7 @@ async function expectReadableHeaderControls(header){
   const loginWidth=await login.evaluate(button=>({client:button.clientWidth,scroll:button.scrollWidth}));
   expect(loginWidth.scroll,'The login label must remain readable').toBeLessThanOrEqual(loginWidth.client+1);
   const actions=await Promise.all([login.boundingBox(),header.getByRole('link',{name:/^Carrito/}).boundingBox()]);
-  for(const link of await header.getByRole('navigation').getByRole('link').all()){
+  for(const link of await header.locator('.toplinks a:visible').all()){
     const nav=await link.boundingBox();
     for(const action of actions){
       const width=Math.max(0,Math.min(nav.x+nav.width,action.x+action.width)-Math.max(nav.x,action.x));
@@ -138,17 +138,25 @@ for(const scenario of [
     await expect(accessibleLogo).toHaveCount(0);
     if(scenario.mobile)expect(await page.evaluate(()=>matchMedia('(hover:none)').matches)).toBe(true);
     const menu=header.getByRole('button',{name:'Abrir menú',exact:true,includeHidden:true});
+    const start=scenario.mobile?menu:home;
     if(scenario.mobile){
       await expect(menu).toBeVisible();
+      await expect(header.locator('.toplinks')).toBeHidden();
       await page.keyboard.press('Tab');
       await expect(menu).toBeFocused();
-    }else await expect(menu).toBeHidden();
-    await page.keyboard.press('Tab');
-    await expect(home).toBeFocused();
+      await page.keyboard.press('Tab');
+      await expect(header.getByRole('link',{name:/^Carrito/})).toBeFocused();
+      await menu.focus();
+    }else{
+      await expect(menu).toBeHidden();
+      await expect(header.locator('.toplinks')).toBeVisible();
+      await page.keyboard.press('Tab');
+      await expect(home).toBeFocused();
+    }
     await logo.evaluate(link=>link.focus());
-    await expect(home).toBeFocused();
+    await expect(start).toBeFocused();
     // Direction must be tested without keyboard focus pinning the header open.
-    await home.evaluate(link=>link.blur());
+    await start.evaluate(link=>link.blur());
 
     await scrollHeader(page,Math.max(1,Math.floor(baseline.mainTop)-2),false,baseline);
     const hiding=await scrollHeader(page,600,true,baseline,{inspectMotion:scenario.mobile});
@@ -176,9 +184,9 @@ for(const scenario of [
     await scrollHeader(page,0,false,baseline);
     await expect(header).toHaveCSS('background-color','rgb(0, 0, 0)');
     await expect(accessibleLogo).toHaveCount(0);
-    await expect(home).toBeFocused();
+    await expect(start).toBeFocused();
     await logo.evaluate(link=>link.focus());
-    await expect(home).toBeFocused();
+    await expect(start).toBeFocused();
 
     if(scenario.reducedMotion==='reduce'){
       for(const element of [header,header.locator('.store-header-brand')]){
@@ -187,18 +195,21 @@ for(const scenario of [
       }
     }
 
-    // Prevent only this link's navigation so native pointer/touch focus can be
+    // Prevent this control's action so native pointer/touch focus can be
     // checked independently: unlike keyboard focus, it must not pin the header.
-    await home.evaluate(link=>{link.blur();link.addEventListener('click',event=>event.preventDefault(),{once:true});});
-    if(scenario.mobile)await home.tap();else await home.click();
+    await start.evaluate(link=>{link.blur();link.addEventListener('click',event=>{event.preventDefault();event.stopPropagation();},{once:true});});
+    if(scenario.mobile)await start.tap();else await start.click();
     expect(await header.evaluate(element=>!!element.querySelector(':focus-visible'))).toBe(false);
-    if(scenario.mobile)await expect(home).toHaveCSS('opacity','1');
+    if(scenario.mobile)await expect(menu).not.toHaveAttribute('aria-expanded','true');
     await scrollHeader(page,500,true,baseline);
     await scrollHeader(page,450,false,baseline);
     await expectReadableHeaderControls(header);
 
     const previousHeader=await header.elementHandle();
-    await header.getByRole('link',{name:'Colección',exact:true}).click();
+    if(scenario.mobile){
+      await menu.click();
+      await page.locator('#store-menu').getByRole('link',{name:'Colección',exact:true}).click();
+    }else await header.getByRole('link',{name:'Colección',exact:true}).click();
     await expect(page).toHaveURL(/#catalog$/);
     await expect.poll(()=>previousHeader.evaluate(node=>node.isConnected)).toBe(false);
     const collectionTitle=page.getByRole('heading',{name:'LA COLECCIÓN.',exact:true});

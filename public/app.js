@@ -76,7 +76,10 @@ function bindStoreHeader(){
     lastScroll=position;
     if(next!==scrolled){
       scrolled=next;
-      if(!scrolled&&logo.contains(document.activeElement))home.focus({preventScroll:true});
+      if(!scrolled&&logo.contains(document.activeElement)){
+        const target=home.getClientRects().length?home:header.querySelector('.store-menu-open');
+        target.focus({preventScroll:true});
+      }
       header.classList.toggle('is-scrolled',scrolled);
       logo.inert=!scrolled;
       logo.setAttribute('aria-hidden',String(!scrolled));
