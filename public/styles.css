@@ -30,6 +30,14 @@ button.product-visual{width:100%;border:0;color:var(--ink)}pre{white-space:pre-w
 @media(hover:hover) and (pointer:fine){.store-header .toplinks a:hover,.store-header .topactions .btn:hover{opacity:.7}}
 .store-header .cart-count{background:#272727;color:#fff;transition:background-color .32s ease,color .32s ease}
 .store-header.is-scrolled .cart-count{background:#eee;color:#111}
+.account-nav{position:relative;flex-shrink:0}
+.store-header .topactions .account-toggle{display:grid;place-items:center;flex:0 0 44px;width:44px;height:44px;min-width:44px;padding:10px;border:0;background:transparent;color:inherit;cursor:pointer}
+.account-toggle:focus-visible{outline:2px solid currentColor;outline-offset:2px}
+.account-toggle svg{display:block}
+.account-menu{position:absolute;top:calc(100% + 12px);right:0;z-index:1;display:flex;flex-direction:column;width:200px;max-width:calc(100vw - 32px);padding:6px;background:#fff;color:#111;border:1px solid #dedede;box-shadow:0 12px 32px #0002}
+.account-menu[hidden]{display:none}
+.store-header .topactions .account-menu :is(a,button){display:flex;align-items:center;width:100%;min-height:44px;padding:12px;text-align:left;border:0;border-radius:0;background:transparent;color:#111;font:inherit;font-size:13px;line-height:1.4;letter-spacing:0;white-space:normal;cursor:pointer}
+.account-menu :is(a,button):hover,.account-menu :is(a,button):focus-visible{background:#f1f1f1;outline:2px solid #111;outline-offset:-2px}
 .store-main .collection-section,.store-main .category-section{scroll-margin-top:calc(var(--store-header-height,105px) + 24px)}
 @media(max-width:1000px){
   .store-header{height:112px;min-height:112px;padding:12px 20px;flex-wrap:wrap;align-content:center;row-gap:8px}
