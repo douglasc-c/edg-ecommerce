@@ -33,12 +33,18 @@ export class CommerceStore extends DurableObject {
       // initialize comparte una promesa, incluida la derivación de la contraseña.
       // Una excepción en blockConcurrencyWhile terminaría el objeto antes del catch.
       await this.initialize();
-      return await new Promise((resolve,reject)=>{
+      const result=await new Promise((resolve,reject)=>{
         const headers=new Headers();let status=200;
         const response={headersSent:false,setHeader(k,v){headers.set(k,v);},writeHead(code,values){status=code;for(const [k,v] of Object.entries(values))headers.set(k,v);this.headersSent=true;},end(content){resolve(new Response(request.method==='HEAD'?null:content??null,{status,headers}));}};
         const req={url:request.url,method:request.method,headers:Object.fromEntries(request.headers),country:normalizeCountry(request.headers.get('x-edg-country')),socket:{remoteAddress:request.headers.get('cf-connecting-ip')||'unknown'},async *[Symbol.asyncIterator](){if(request.body){for await(const chunk of request.body)yield Buffer.from(chunk);}}};
         this.app.handler(req,response).catch(reject);
       });
+      if(request.method==='POST'&&new URL(request.url).pathname==='/api/auth/forgot-password'&&result.ok){
+        // Keep delivery alive after the generic HTTP response, even if the
+        // client disconnects. Cron remains the fallback for scheduled retries.
+        this.ctx.waitUntil(this.app.recovery.flush().catch(()=>console.error('Error en el mantenimiento de correos')));
+      }
+      return result;
     }catch(error){console.error('Tienda no disponible:',error.message);return storeUnavailable();}
   }
   async maintenance(){await this.initialize();this.app.shop.expire();await this.app.recovery.flush();}

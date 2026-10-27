@@ -9,6 +9,11 @@ import jpeg from 'jpeg-js';
 const directory=await mkdtemp(join(tmpdir(),'edg-worker-'));
 const origin='https://store.example.test',password='Smoke-Test-Password-2026';
 let mf;
+async function within(promise,message){
+  let timer;
+  try{return await Promise.race([promise,new Promise((_,reject)=>{timer=setTimeout(()=>reject(new Error(message)),5000);})]);}
+  finally{clearTimeout(timer);}
+}
 try{
   execFileSync(process.execPath,['node_modules/wrangler/bin/wrangler.js','deploy','--dry-run','--outdir',directory],{stdio:'pipe'});
   const options={name:"edg-test",modulesRoot:directory,modules:true,scriptPath:join(directory,'worker.js'),compatibilityDate:'2026-01-01',compatibilityFlags:['nodejs_compat'],cf:false,host:'127.0.0.1',port:0,
@@ -220,5 +225,50 @@ try{
   assert.match(result.r.headers.get('set-cookie'),/edg_session=.*; HttpOnly; SameSite=Strict; Path=\/; Max-Age=86400; Secure/);
   result=await domainLogin(origin);assert.equal(result.r.status,403);assert.equal(result.data.error,'Origen no permitido.');
   assert.equal(result.r.headers.get('set-cookie'),null,'El dominio anterior deja de autorizar nuevos inicios de sesión');
-  console.log('Workers: idioma, rangos MP4, administración, autorización, fotos, categorías, migración conservativa, variantes de color y talla, inventario independiente, eliminación, bloqueo de ventas, persistencia, conexión Sendcloud sin seguir redirecciones e inicio de sesión al cambiar APP_URL verificados.');
+  // A password request must start the real workerd fetch without a scheduled
+  // event, while its generic HTTP response does not wait for the provider.
+  let sendStarted,releaseSend,payload;
+  const started=new Promise(resolve=>{sendStarted=resolve;}),deliveryGate=new Promise(resolve=>{releaseSend=resolve;});
+  const emailRequests=[];
+  await mf.dispose();mf=create({...options,bindings:{...options.bindings,RESEND_API_KEY:'re-worker-fixture-key',EMAIL_FROM:'EDG <reset@example.test>',EMAIL_ENCRYPTION_KEY:'a'.repeat(64)},outboundService:async request=>{
+    assert.equal(request.url,'https://api.resend.com/emails');
+    assert.equal(request.headers.get('authorization'),'Bearer re-worker-fixture-key');
+    assert.ok(request.headers.get('idempotency-key'));
+    payload=await request.json();emailRequests.push(payload);sendStarted();
+    await deliveryGate;return Response.json({id:'mail-worker-accepted'});
+  }});
+  try{
+    assert.equal((await call('/api/config')).data.email_enabled,true);
+    const customer=await call('/api/auth/register','POST',{name:'Cliente Correo',email:'reset-customer@example.test',password});
+    assert.equal(customer.r.status,201,JSON.stringify(customer.data));
+    const customerCookie=customer.r.headers.get('set-cookie').split(';')[0];
+    const requested=await within(call('/api/auth/forgot-password','POST',{email:'reset-customer@example.test'}),'La respuesta pública no debe esperar al proveedor de correo');
+    assert.equal(requested.r.status,200,JSON.stringify(requested.data));
+    assert.deepEqual(Object.keys(requested.data),['message']);
+    try{await within(started,'La recuperación debe llamar a Resend sin esperar al cron');}
+    catch(error){
+      const rows=(await call('/api/admin/emails')).data;
+      throw new Error(error.message+'; cola: '+JSON.stringify(rows.map(({attempts,last_error,sent_at})=>({attempts,last_error,sent_at}))));
+    }
+    assert.equal(payload.from,'EDG <reset@example.test>');assert.deepEqual(payload.to,['reset-customer@example.test']);
+    const raw=payload.text.match(/reset-password\/([a-f0-9]{64})/)[1];
+    assert.ok(!JSON.stringify(requested.data).includes(raw));
+    const queued=(await call('/api/admin/emails')).data.find(row=>row.recipient==='reset-customer@example.test');
+    assert.equal(queued.sent_at,null,'El proveedor todavía no ha confirmado el envío');assert.equal(queued.preview,undefined);
+    releaseSend();
+    await within((async()=>{
+      for(;;){
+        const row=(await call('/api/admin/emails')).data.find(item=>item.recipient==='reset-customer@example.test');
+        if(row.sent_at){assert.equal(row.last_error,null);break;}
+        await new Promise(resolve=>setTimeout(resolve,25));
+      }
+    })(),'La confirmación de Resend debe persistirse en la cola');
+    const absent=await call('/api/auth/forgot-password','POST',{email:'missing-customer@example.test'});
+    assert.deepEqual(absent.data,requested.data,'Una cuenta inexistente recibe la misma respuesta pública');
+    assert.equal(emailRequests.length,1);
+    result=await call('/api/auth/reset-password','POST',{token:raw,password:'New-Worker-Password-2026'});assert.equal(result.r.status,200,JSON.stringify(result.data));
+    result=await call('/api/cart','GET',undefined,{Cookie:customerCookie,'X-CSRF-Token':customer.data.csrf});assert.equal(result.r.status,401,'La recuperación revoca la sesión anterior');
+    result=await call('/api/auth/login','POST',{email:'reset-customer@example.test',password:'New-Worker-Password-2026'});assert.equal(result.r.status,200,JSON.stringify(result.data));
+  }finally{releaseSend();}
+  console.log('Workers: recuperación con entrega inmediata en segundo plano a Resend, respuesta genérica, cola persistente, cambio de contraseña y revocación de sesiones; idioma, rangos MP4, administración, autorización, fotos, categorías, variantes, inventario, conexión Sendcloud y persistencia verificados.');
 }finally{if(mf)await mf.dispose();await rm(directory,{recursive:true,force:true});}
