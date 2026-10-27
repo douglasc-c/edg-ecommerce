@@ -109,7 +109,9 @@ Los productos, las fotos, las cuentas, las sesiones, los movimientos, los pedido
 
 Esta implementación utiliza una tienda por Worker. Para Brasil y Europa, publica Workers separados con configuraciones propias y datos e inventarios aislados. La moneda es una configuración por tienda: cambiar `EUR` por `BRL` modifica la visualización, pero no convierte los importes. Configura la moneda antes de registrar el catálogo. La arquitectura actual concentra la base de datos en un objeto; para un volumen elevado, reevalúa el particionado y las imágenes en R2.
 
-El cron se ejecuta cada cinco minutos y procesa el mantenimiento y los correos electrónicos configurados. Las reservas también caducan al consultar productos o pedidos. En modo catálogo no hay nuevas reservas. Los datos locales de prueba no se envían a producción.
+La recuperación de contraseña inicia el envío en segundo plano al aceptar la solicitud, sin esperar al cron. El Durable Object usa `ctx.waitUntil` para mantener la entrega aunque el cliente cierre la página. El cron se ejecuta cada cinco minutos y conserva el mantenimiento y los reintentos de correos configurados. Las reservas también caducan al consultar productos o pedidos. En modo catálogo sin checkout no hay nuevas reservas. Los datos locales de prueba no se envían a producción.
+
+Para diagnosticar un correo que no llega, consulta **Gestión → Correos electrónicos**. Sin registro, comprueba el correo y que la cuenta esté activa en el entorno actual; los usuarios de pruebas y producción se guardan por separado. Un registro con error indica qué configuración revisar (`RESEND_API_KEY`, `EMAIL_FROM`, el dominio/permisos o `EMAIL_ENCRYPTION_KEY`). Conserva la clave de cifrado existente; si cambió, solicita un enlace nuevo. Un registro **Enviado** confirma la aceptación por Resend: revisa **Emails** en Resend para comprobar la entrega final. Mantén `APP_URL=https://www.edgskateboards.com` y un remitente del dominio verificado. Configurar Email Routing no realiza estos envíos de recuperación; solo recibe o reenvía correo entrante.
 
 ## Validar antes del despliegue
 
