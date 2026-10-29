@@ -44,7 +44,7 @@ function jumpSkateSection(button){
 function skateStoreMenu(){
   const route=location.hash||'#store';
   const link=(href,label)=>`<a href="${href}"${route===href?' aria-current="page"':''}>${label}</a>`;
-  return `<dialog id="store-menu" class="store-menu" aria-labelledby="store-menu-title"><div class="store-menu-head"><span id="store-menu-title" class="eyebrow">EDG / Original . Barcelona</span><button class="store-menu-close" type="button" data-action="close-store-menu" aria-label="Cerrar menú">×</button></div><nav class="store-menu-links" aria-label="Menú principal">${link('#store','Inicio')}${link('#catalog','Colección')}${link('#skate','SKATE')}${link('#musica','MÚSICA')}${state.user?link('#orders','Mis pedidos'):''}${has('dashboard')?link('#admin','Gestión'):''}</nav><p class="store-menu-caption">Skateboarding y cultura urbana.</p></dialog>`;
+  return `<dialog id="store-menu" class="store-menu" aria-labelledby="store-menu-title"><div class="store-menu-head"><span id="store-menu-title" class="eyebrow">EDG / Original . Barcelona</span><button class="store-menu-close" type="button" data-action="close-store-menu" aria-label="Cerrar menú">×</button></div><nav class="store-menu-links" aria-label="Menú principal">${link('#store','Inicio')}${link('#catalog','Colección')}${link('#skate','SKATE')}${link('#musica','MÚSICA')}${state.user?link('#orders','Mis pedidos'):''}</nav><p class="store-menu-caption">Skateboarding y cultura urbana.</p></dialog>`;
 }
 function bindSkateNavigation(){
   const menu=document.getElementById('store-menu'),controller=new AbortController(),options={signal:controller.signal};
