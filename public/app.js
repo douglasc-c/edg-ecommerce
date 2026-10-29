@@ -340,7 +340,7 @@ function legalFormNotice(){
 function storeAccountControl(){
   const icon='<svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><circle cx="12" cy="8" r="4"/><path d="M4 21v-2a8 8 0 0 1 16 0v2"/></svg>';
   if(!state.user)return `<button class="account-toggle" type="button" data-action="login" aria-label="Iniciar sesión" title="Iniciar sesión">${icon}</button>`;
-  return `<div class="account-nav"><button class="account-toggle" type="button" data-account-toggle aria-label="Mi cuenta" title="Mi cuenta" aria-controls="account-menu" aria-expanded="false">${icon}</button><nav id="account-menu" class="account-menu" aria-label="Mi cuenta" hidden><a href="#orders">Mis pedidos</a><button type="button" data-action="password">Contraseña</button><button type="button" data-action="logout">Cerrar sesión</button></nav></div>`;
+  return `<div class="account-nav"><button class="account-toggle" type="button" data-account-toggle aria-label="Mi cuenta" title="Mi cuenta" aria-controls="account-menu" aria-expanded="false">${icon}</button><nav id="account-menu" class="account-menu" aria-label="Mi cuenta" hidden><a href="#orders">Mis pedidos</a>${has('dashboard')?'<a href="#admin">Gestión</a>':''}<button type="button" data-action="password">Contraseña</button><button type="button" data-action="logout">Cerrar sesión</button></nav></div>`;
 }
 function storeShell(content) {
   const count=state.cart.items.reduce((s,p)=>s+p.quantity,0);
